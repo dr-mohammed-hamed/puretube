@@ -87,24 +87,18 @@ val RadiantEmerald = Color(0xFF00D09C) // عدل هذا السطر فقط!
 فيتغير اللون فوراً في الـ 50 ملفاً تلقائياً بدون أي تدخل إضافي!
 
 ### ب. لو أردت إضافة ثيم لوني جديد بالكامل (مثل: ثيم السواد التام أو ثيم أزرق الياقوت):
-تفتح ملف [ThemePreset.kt](file:///d:/b/puretube) وتضيف الثيم الجديد ضمن القائمة:
+تفتح ملف [ThemePreset.kt](file:///d:/b/puretube/app/src/main/java/com/dr/tech/puretube/core/designsystem/theme/ThemePreset.kt) وتجد قائمة الثيمات الستة المعتمدة:
 ```kotlin
-enum class ThemePreset {
-    EMERALD_NIGHT,   // الثيم الافتراضي: الزمردي المشع + الأسود الفحمي
-    OLED_PURE_BLACK, // ثيم السواد التام لشاشات الأوليد
-    SAPPHIRE_OCEAN   // ثيم أزرق الياقوت الهادئ
+enum class ThemePreset(val titleArabic: String, val descriptionArabic: String) {
+    EMERALD_NIGHT("الزمرد المشع", "أسود فحمي ملكي مع زمرد فيروزي وعنبر دافئ"),
+    ROYAL_INDIGO("نور ووقار", "كحلي ملكي عميق مع أرجواني ساطع وذهب دافئ"),
+    NORDIC_SAGE("سكينة الطبيعة", "أخضر غابي داكن مع نعناع مهدئ ورمل ناعم"),
+    WARM_ESPRESSO("دفء الأصالة", "بني إسبريسو داكن مع توهج عنبري مريح للقراءة ليلاً"),
+    OLED_PURE_BLACK("سواد الأوليد", "سواد نقي 100% لأقصى توفير للطاقة على شاشات AMOLED"),
+    SAPPHIRE_OCEAN("أزرق الياقوت", "أزرق محيطي هادئ يبعث على التركيز والصفاء")
 }
-
-// تعريف ألوان الثيم الجديد هنا فقط:
-val SapphireColorScheme = PureColorScheme(
-    primary = Color(0xFF0EA5E9), // أزرق ياقوتي منعش
-    secondary = Color(0xFFF59E0B),
-    background = Color(0xFF0A0E17),
-    surface = Color(0xFF131B2B),
-    ...
-)
 ```
-ويقوم التطبيق بحفظ اختيار المستخدم في الإعدادات عبر `DataStore`، فيتحول التطبيق بالكامل للثيم الجديد لحظياً.
+ويقوم التطبيق بحفظ اختيار المستخدم في الإعدادات، فيتحول التطبيق بالكامل للثيم الجديد لحظياً دون لمس ملفات الشاشات.
 
 ---
 
