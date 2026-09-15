@@ -10,12 +10,18 @@ material = "1.14.0"
 activityCompose = "1.9.3"
 lifecycleCompose = "2.8.7"
 composeBom = "2024.10.01"
-room = "2.6.1"
+room = "2.7.0"
+ksp = "2.0.21-1.0.28"
 media3 = "1.5.0"
 koin = "3.5.6"
 coil = "2.7.0"
 okhttp = "4.12.0"
 newpipeExtractor = "v0.24.4"
+desugarJdkLibs = "2.1.5"
+kotlinxCoroutinesTest = "1.8.1"
+json = "20240303"
+robolectric = "4.14.1"
+androidxTestCore = "1.6.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +46,7 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 # Room
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 # Media3
 media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
@@ -57,7 +64,18 @@ koin-androidx-compose = { group = "io.insert-koin", name = "koin-androidx-compos
 # Image Loading
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
+# Desugaring
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
+
+# Testing
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+json = { group = "org.json", name = "json", version.ref = "json" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+
 
