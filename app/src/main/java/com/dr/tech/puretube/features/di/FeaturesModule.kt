@@ -43,4 +43,14 @@ val featuresModule = module {
             historyRepository = get()
         )
     }
+
+    viewModel {
+        com.dr.tech.puretube.features.player.PlayerViewModel(
+            playerManager = get(),
+            videoDetailsRepository = get(),
+            historyRepository = get(),
+            subscriptionRepository = get(),
+            watchLaterRepository = get()
+        )
+    }
 }

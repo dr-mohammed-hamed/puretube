@@ -50,4 +50,10 @@ val repositoryModule = module {
             historyDao = get()
         )
     }
+
+    single<com.dr.tech.puretube.core.data.repository.VideoDetailsRepository> {
+        com.dr.tech.puretube.core.data.repository.VideoDetailsRepositoryImpl(
+            extractorThrottler = get()
+        )
+    }
 }

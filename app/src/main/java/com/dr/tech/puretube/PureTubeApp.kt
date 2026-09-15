@@ -50,7 +50,13 @@ class PureTubeApp : Application() {
         startKoin {
             androidLogger(Level.ERROR)
             androidContext(this@PureTubeApp)
-            modules(coreModule, databaseModule, repositoryModule, featuresModule)
+            modules(
+                coreModule,
+                databaseModule,
+                repositoryModule,
+                featuresModule,
+                com.dr.tech.puretube.player.di.playerModule
+            )
         }
 
         // 3. Auto-seed Curated Starter Pack if subscriptions are empty (Constitution Principle I & PM Decision 1)
