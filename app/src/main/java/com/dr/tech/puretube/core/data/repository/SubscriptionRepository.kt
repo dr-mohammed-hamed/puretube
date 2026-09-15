@@ -22,6 +22,7 @@ class SubscriptionRepository(
     private val subscriptionDao: SubscriptionDao,
     private val extractorThrottler: ExtractorThrottler,
     private val importExportService: ImportExportService,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
     var onSubscriptionsChanged: (suspend () -> Unit)? = null
 ) {
     private val _subscriptionEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
@@ -45,7 +46,7 @@ class SubscriptionRepository(
     /**
      * Returns the one-shot list of all subscriptions on Dispatchers.IO.
      */
-    suspend fun getAllSubscriptions(): List<SubscriptionEntity> = withContext(Dispatchers.IO) {
+    suspend fun getAllSubscriptions(): List<SubscriptionEntity> = withContext(ioDispatcher) {
         subscriptionDao.getAll()
     }
 
@@ -53,7 +54,7 @@ class SubscriptionRepository(
      * Checks if the subscription database is empty on app startup.
      * If empty, seeds the CuratedStarterPack without overriding existing preferences later.
      */
-    suspend fun checkAndSeedStarterPackIfEmpty(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun checkAndSeedStarterPackIfEmpty(): Boolean = withContext(ioDispatcher) {
         if (subscriptionDao.getCount() == 0) {
             subscriptionDao.insertAll(CuratedStarterPack.channels)
             notifySubscriptionsChanged()
@@ -66,7 +67,7 @@ class SubscriptionRepository(
     /**
      * Re-activates / re-seeds the Curated Starter Pack on demand.
      */
-    suspend fun reactivateStarterPack() = withContext(Dispatchers.IO) {
+    suspend fun reactivateStarterPack() = withContext(ioDispatcher) {
         subscriptionDao.insertAll(CuratedStarterPack.channels)
         notifySubscriptionsChanged()
     }
@@ -74,7 +75,7 @@ class SubscriptionRepository(
     /**
      * Subscribes to a channel.
      */
-    suspend fun subscribe(entity: SubscriptionEntity) = withContext(Dispatchers.IO) {
+    suspend fun subscribe(entity: SubscriptionEntity) = withContext(ioDispatcher) {
         subscriptionDao.insert(entity)
         notifySubscriptionsChanged()
     }
@@ -82,7 +83,7 @@ class SubscriptionRepository(
     /**
      * Unsubscribes from a channel by ID.
      */
-    suspend fun unsubscribe(channelId: String) = withContext(Dispatchers.IO) {
+    suspend fun unsubscribe(channelId: String) = withContext(ioDispatcher) {
         subscriptionDao.deleteById(channelId)
         notifySubscriptionsChanged()
     }
@@ -133,7 +134,7 @@ class SubscriptionRepository(
      * Imports subscriptions from NewPipe JSON format.
      * Returns count of imported items.
      */
-    suspend fun importFromNewPipeJson(jsonContent: String): Result<Int> = withContext(Dispatchers.IO) {
+    suspend fun importFromNewPipeJson(jsonContent: String): Result<Int> = withContext(ioDispatcher) {
         importExportService.parseNewPipeJson(jsonContent).mapCatching { entities ->
             if (entities.isNotEmpty()) {
                 subscriptionDao.insertAll(entities)
@@ -147,7 +148,7 @@ class SubscriptionRepository(
      * Imports subscriptions from Google Takeout CSV format.
      * Returns count of imported items.
      */
-    suspend fun importFromGoogleTakeoutCsv(csvContent: String): Result<Int> = withContext(Dispatchers.IO) {
+    suspend fun importFromGoogleTakeoutCsv(csvContent: String): Result<Int> = withContext(ioDispatcher) {
         importExportService.parseGoogleTakeoutCsv(csvContent).mapCatching { entities ->
             if (entities.isNotEmpty()) {
                 subscriptionDao.insertAll(entities)
@@ -160,10 +161,17 @@ class SubscriptionRepository(
     /**
      * Exports current subscriptions into NewPipe-compatible JSON string.
      */
-    suspend fun exportToNewPipeJson(): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun exportToNewPipeJson(): Result<String> = withContext(ioDispatcher) {
         runCatching {
             val all = subscriptionDao.getAll()
             importExportService.exportToNewPipeJson(all)
         }
+    }
+
+    /**
+     * Returns total count of subscriptions.
+     */
+    suspend fun getSubscriptionCount(): Int = withContext(ioDispatcher) {
+        subscriptionDao.getCount()
     }
 }

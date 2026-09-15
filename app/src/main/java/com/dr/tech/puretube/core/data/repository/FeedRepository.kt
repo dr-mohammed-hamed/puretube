@@ -27,7 +27,8 @@ class FeedRepository(
     private val subscriptionDao: SubscriptionDao,
     private val extractorThrottler: ExtractorThrottler,
     private val cacheTtlMs: Long = 15 * 60 * 1000L, // 15 minutes default TTL
-    private val channelVideosFetcher: (suspend (channelId: String, channelName: String) -> Result<List<FeedVideoItem>>)? = null
+    private val channelVideosFetcher: (suspend (channelId: String, channelName: String) -> Result<List<FeedVideoItem>>)? = null,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
 ) {
     private val cacheMutex = Mutex()
     private val fetchMutex = Mutex()
@@ -63,7 +64,7 @@ class FeedRepository(
      * Reuses in-memory cache if within the 15-minute window and not force-refreshed.
      * Prevents thundering-herd duplicate network sweeps via fetchMutex.
      */
-    suspend fun getFeed(forceRefresh: Boolean = false): Result<List<FeedVideoItem>> = withContext(Dispatchers.IO) {
+    suspend fun getFeed(forceRefresh: Boolean = false): Result<List<FeedVideoItem>> = withContext(ioDispatcher) {
         // Fast-path: return cached feed if valid and not force-refreshing
         if (!forceRefresh) {
             cacheMutex.withLock {

@@ -8,6 +8,7 @@ import com.dr.tech.puretube.core.aibridge.VideoFrameHook
 import com.dr.tech.puretube.core.data.di.repositoryModule
 import com.dr.tech.puretube.core.data.repository.SubscriptionRepository
 import com.dr.tech.puretube.core.database.di.databaseModule
+import com.dr.tech.puretube.features.di.featuresModule
 import com.dr.tech.puretube.core.extractor.ExtractorThrottler
 import com.dr.tech.puretube.core.extractor.PureDownloader
 import kotlinx.coroutines.CoroutineScope
@@ -49,7 +50,7 @@ class PureTubeApp : Application() {
         startKoin {
             androidLogger(Level.ERROR)
             androidContext(this@PureTubeApp)
-            modules(coreModule, databaseModule, repositoryModule)
+            modules(coreModule, databaseModule, repositoryModule, featuresModule)
         }
 
         // 3. Auto-seed Curated Starter Pack if subscriptions are empty (Constitution Principle I & PM Decision 1)

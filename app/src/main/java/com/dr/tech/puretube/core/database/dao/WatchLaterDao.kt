@@ -25,6 +25,9 @@ interface WatchLaterDao {
     @Query("DELETE FROM watch_later WHERE videoId = :videoId")
     suspend fun deleteById(videoId: String): Int
 
+    @Query("DELETE FROM watch_later")
+    suspend fun clearAll(): Int
+
     @Query("SELECT COUNT(*) FROM watch_later")
     suspend fun getCount(): Int
 }

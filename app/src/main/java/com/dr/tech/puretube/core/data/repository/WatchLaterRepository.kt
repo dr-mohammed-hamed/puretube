@@ -11,7 +11,8 @@ import kotlinx.coroutines.withContext
  * Conforms to Constitution Principles I, III, IV, and VIII.
  */
 class WatchLaterRepository(
-    private val watchLaterDao: WatchLaterDao
+    private val watchLaterDao: WatchLaterDao,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
 ) {
 
     /**
@@ -27,21 +28,28 @@ class WatchLaterRepository(
     /**
      * Adds or updates a video in Watch Later.
      */
-    suspend fun addToWatchLater(entity: WatchLaterEntity) = withContext(Dispatchers.IO) {
+    suspend fun addToWatchLater(entity: WatchLaterEntity) = withContext(ioDispatcher) {
         watchLaterDao.insert(entity)
     }
 
     /**
      * Removes a video from Watch Later by its YouTube videoId.
      */
-    suspend fun removeFromWatchLater(videoId: String) = withContext(Dispatchers.IO) {
+    suspend fun removeFromWatchLater(videoId: String) = withContext(ioDispatcher) {
         watchLaterDao.deleteById(videoId)
+    }
+
+    /**
+     * Clears all videos from Watch Later.
+     */
+    suspend fun clearAll() = withContext(ioDispatcher) {
+        watchLaterDao.clearAll()
     }
 
     /**
      * Returns total count of items currently in Watch Later.
      */
-    suspend fun getWatchLaterCount(): Int = withContext(Dispatchers.IO) {
+    suspend fun getWatchLaterCount(): Int = withContext(ioDispatcher) {
         watchLaterDao.getCount()
     }
 }

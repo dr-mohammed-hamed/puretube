@@ -12,7 +12,8 @@ import kotlinx.coroutines.withContext
  * Stored strictly on device, Long millisecond accuracy, zero ephemeral stream tokens persisted.
  */
 class HistoryRepository(
-    private val historyDao: HistoryDao
+    private val historyDao: HistoryDao,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
 ) {
 
     /**
@@ -24,21 +25,21 @@ class HistoryRepository(
      * Retrieves the last playback position in milliseconds for exact resume.
      * Returns null or 0L if no prior record exists.
      */
-    suspend fun getPlaybackPosition(videoId: String): Long? = withContext(Dispatchers.IO) {
+    suspend fun getPlaybackPosition(videoId: String): Long? = withContext(ioDispatcher) {
         historyDao.getPlaybackPosition(videoId)
     }
 
     /**
      * Retrieves the full history entity for a video.
      */
-    suspend fun getHistoryItem(videoId: String): HistoryEntity? = withContext(Dispatchers.IO) {
+    suspend fun getHistoryItem(videoId: String): HistoryEntity? = withContext(ioDispatcher) {
         historyDao.getById(videoId)
     }
 
     /**
      * Records or updates playback start for a video.
      */
-    suspend fun recordPlayback(entity: HistoryEntity) = withContext(Dispatchers.IO) {
+    suspend fun recordPlayback(entity: HistoryEntity) = withContext(ioDispatcher) {
         historyDao.upsert(entity)
     }
 
@@ -49,28 +50,35 @@ class HistoryRepository(
         videoId: String,
         positionMs: Long,
         timestampMs: Long = System.currentTimeMillis()
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(ioDispatcher) {
         historyDao.updatePlaybackPosition(videoId, positionMs, timestampMs)
     }
 
     /**
      * Marks video playback as completed and resets playback position.
      */
-    suspend fun markCompleted(videoId: String) = withContext(Dispatchers.IO) {
+    suspend fun markCompleted(videoId: String) = withContext(ioDispatcher) {
         historyDao.markCompleted(videoId)
     }
 
     /**
      * Deletes a single history entry by video ID.
      */
-    suspend fun deleteFromHistory(videoId: String) = withContext(Dispatchers.IO) {
+    suspend fun deleteFromHistory(videoId: String) = withContext(ioDispatcher) {
         historyDao.deleteById(videoId)
     }
 
     /**
      * Clears all playback history.
      */
-    suspend fun clearAllHistory() = withContext(Dispatchers.IO) {
+    suspend fun clearAllHistory() = withContext(ioDispatcher) {
         historyDao.clearAll()
+    }
+
+    /**
+     * Returns total count of items in history.
+     */
+    suspend fun getHistoryCount(): Int = withContext(ioDispatcher) {
+        historyDao.getCount()
     }
 }

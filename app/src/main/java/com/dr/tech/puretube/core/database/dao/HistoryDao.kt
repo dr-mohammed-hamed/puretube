@@ -36,4 +36,7 @@ interface HistoryDao {
 
     @Query("DELETE FROM playback_history")
     suspend fun clearAll(): Int
+
+    @Query("SELECT COUNT(*) FROM playback_history")
+    suspend fun getCount(): Int
 }
