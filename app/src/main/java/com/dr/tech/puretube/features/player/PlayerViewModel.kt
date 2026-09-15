@@ -13,13 +13,13 @@ import com.dr.tech.puretube.core.database.entity.HistoryEntity
 import com.dr.tech.puretube.core.database.entity.SubscriptionEntity
 import com.dr.tech.puretube.core.database.entity.WatchLaterEntity
 import com.dr.tech.puretube.player.PurePlayerManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class PlayerUiState(
@@ -40,7 +40,8 @@ data class PlayerUiState(
 
 /**
  * ViewModel managing player state, video details extraction, and database syncing.
- * Conforms to Constitution Principles I, IV, V, VI, VIII, and IX.
+ * History loop delegated to [PlayerPlaybackSyncHelper]. Constitution V/VI/IX:
+ * viewModelScope only, debounce on toggles, zero double-bang, Result<T>, Long ms.
  */
 class PlayerViewModel(
     val playerManager: PurePlayerManager,
@@ -54,11 +55,12 @@ class PlayerViewModel(
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     private var currentVideoId: String? = null
-    private var historySyncJob: Job? = null
+    private val syncHelper = PlayerPlaybackSyncHelper(historyRepository)
     private var loadVideoJob: Job? = null
     private var subObserveJob: Job? = null
     private var watchLaterObserveJob: Job? = null
     private var channelVideosJob: Job? = null
+    private val collectorJobs = mutableListOf<Job>()
     private var isTogglingSubscription = false
     private var isTogglingWatchLater = false
 
@@ -66,80 +68,39 @@ class PlayerViewModel(
         observePlayerManagerState()
     }
 
+    private fun <T> trackCollect(flow: Flow<T>, update: (PlayerUiState, T) -> PlayerUiState) {
+        collectorJobs += viewModelScope.launch { flow.collect { v -> _uiState.update { update(it, v) } } }
+    }
+
     private fun observePlayerManagerState() {
-        viewModelScope.launch {
-            playerManager.isPlaying.collect { playing ->
-                _uiState.update { it.copy(isPlaying = playing) }
-            }
-        }
-        viewModelScope.launch {
-            playerManager.isBuffering.collect { buffering ->
-                _uiState.update { it.copy(isBuffering = buffering) }
-            }
-        }
-        viewModelScope.launch {
-            playerManager.currentPositionMs.collect { pos ->
-                _uiState.update { it.copy(currentPositionMs = pos) }
-            }
-        }
-        viewModelScope.launch {
-            playerManager.durationMs.collect { dur ->
-                if (dur > 0L) {
-                    _uiState.update { it.copy(durationMs = dur) }
-                }
-            }
-        }
-        viewModelScope.launch {
-            playerManager.currentQuality.collect { quality ->
-                _uiState.update { it.copy(currentQuality = quality) }
-            }
-        }
-        viewModelScope.launch {
-            playerManager.isAudioOnly.collect { audioOnly ->
-                _uiState.update { it.copy(isAudioOnly = audioOnly) }
-            }
-        }
-        viewModelScope.launch {
-            playerManager.playbackSpeed.collect { speed ->
-                _uiState.update { it.copy(playbackSpeed = speed) }
-            }
-        }
-        viewModelScope.launch {
-            playerManager.errorMessage.collect { error ->
-                _uiState.update { it.copy(errorMessage = error) }
-            }
-        }
+        trackCollect(playerManager.isPlaying) { s, v -> s.copy(isPlaying = v) }
+        trackCollect(playerManager.isBuffering) { s, v -> s.copy(isBuffering = v) }
+        trackCollect(playerManager.currentPositionMs) { s, v -> s.copy(currentPositionMs = v) }
+        trackCollect(playerManager.durationMs) { s, v -> if (v > 0L) s.copy(durationMs = v) else s }
+        trackCollect(playerManager.currentQuality) { s, v -> s.copy(currentQuality = v) }
+        trackCollect(playerManager.isAudioOnly) { s, v -> s.copy(isAudioOnly = v) }
+        trackCollect(playerManager.playbackSpeed) { s, v -> s.copy(playbackSpeed = v) }
+        trackCollect(playerManager.errorMessage) { s, v -> s.copy(errorMessage = v) }
     }
 
     fun loadVideo(videoId: String, force: Boolean = false) {
         if (!force && currentVideoId == videoId && _uiState.value.videoDetails != null) {
-            if (historySyncJob?.isActive != true) startHistorySync()
+            if (!syncHelper.isSyncing) startHistorySync()
             return
         }
         currentVideoId = videoId
-        _uiState.update { it.copy(isLoading = true, errorMessage = null, durationMs = 0L) }
-
+        _uiState.update { it.copy(isLoading = true, errorMessage = null, durationMs = 0L, videoDetails = null, relatedVideos = emptyList()) }
         loadVideoJob?.cancel()
-        historySyncJob?.cancel()
+        syncHelper.stop()
         subObserveJob?.cancel()
         watchLaterObserveJob?.cancel()
         channelVideosJob?.cancel()
         loadVideoJob = viewModelScope.launch {
             val requestId = videoId
             val savedPosition = historyRepository.getPlaybackPosition(videoId) ?: 0L
-
-            val result = videoDetailsRepository.extractVideoDetails(videoId)
-            result.onSuccess { details ->
+            videoDetailsRepository.extractVideoDetails(videoId).onSuccess { details ->
                 if (requestId != currentVideoId) return@launch
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        videoDetails = details,
-                        durationMs = details.durationMs
-                    )
-                }
-
-                // Record start in History (skip unplayable videos with no streams)
+                _uiState.update { it.copy(isLoading = false, videoDetails = details, durationMs = details.durationMs) }
                 if (requestId != currentVideoId) return@launch
                 if (details.videoStreams.isNotEmpty() || details.audioStreams.isNotEmpty()) {
                     historyRepository.recordPlayback(
@@ -155,30 +116,17 @@ class PlayerViewModel(
                         )
                     )
                 }
-
-                // Sync initial subscription & watch later state
                 if (requestId != currentVideoId) return@launch
                 observeChannelAndBookmarkState(details.channelId, details.videoId)
-
-                // Fetch other videos from the same channel (strictly no algorithms)
                 if (requestId != currentVideoId) return@launch
                 loadChannelVideos(details.channelId)
-
-                // Prepare and load stream into ExoPlayer
                 if (requestId != currentVideoId) return@launch
                 playerManager.loadVideo(details, startPositionMs = savedPosition)
-
-                // Start periodic history persistence
                 if (requestId != currentVideoId) return@launch
                 startHistorySync()
             }.onFailure { error ->
                 if (requestId != currentVideoId) return@launch
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = error.localizedMessage ?: "تعذر استخراج بيانات الفيديو"
-                    )
-                }
+                _uiState.update { it.copy(isLoading = false, videoDetails = null, relatedVideos = emptyList(), errorMessage = error.localizedMessage ?: "تعذر استخراج بيانات الفيديو") }
             }
         }
     }
@@ -187,14 +135,10 @@ class PlayerViewModel(
         subObserveJob?.cancel()
         watchLaterObserveJob?.cancel()
         subObserveJob = viewModelScope.launch {
-            subscriptionRepository.isSubscribed(channelId).collect { sub ->
-                _uiState.update { it.copy(isSubscribed = sub) }
-            }
+            subscriptionRepository.isSubscribed(channelId).collect { sub -> _uiState.update { it.copy(isSubscribed = sub) } }
         }
         watchLaterObserveJob = viewModelScope.launch {
-            watchLaterRepository.isInWatchLater(videoId).collect { saved ->
-                _uiState.update { it.copy(isSavedToWatchLater = saved) }
-            }
+            watchLaterRepository.isInWatchLater(videoId).collect { saved -> _uiState.update { it.copy(isSavedToWatchLater = saved) } }
         }
     }
 
@@ -202,33 +146,15 @@ class PlayerViewModel(
         channelVideosJob?.cancel()
         val requestedVideoId = currentVideoId
         channelVideosJob = viewModelScope.launch {
-            val res = videoDetailsRepository.getChannelVideos(channelId, limit = 15)
-            res.onSuccess { list ->
+            videoDetailsRepository.getChannelVideos(channelId, limit = 15).onSuccess { list ->
                 if (requestedVideoId != currentVideoId) return@onSuccess
-                val filtered = list.filter { it.videoId != currentVideoId }
-                _uiState.update { it.copy(relatedVideos = filtered) }
+                _uiState.update { it.copy(relatedVideos = list.filter { item -> item.videoId != currentVideoId }) }
             }
         }
     }
 
     private fun startHistorySync() {
-        historySyncJob?.cancel()
-        historySyncJob = viewModelScope.launch {
-            while (isActive) {
-                delay(5000)
-                val vid = currentVideoId ?: continue
-                val isCurrentlyPlaying = playerManager.isPlaying.value
-                val pos = _uiState.value.currentPositionMs
-                val dur = _uiState.value.durationMs
-
-                if (isCurrentlyPlaying && pos > 0L) {
-                    historyRepository.updatePlaybackPosition(vid, pos)
-                    if (dur > 0L && pos >= (dur * 0.95)) {
-                        historyRepository.markCompleted(vid)
-                    }
-                }
-            }
-        }
+        syncHelper.start(viewModelScope, { currentVideoId }, { _uiState.value.currentPositionMs }, { _uiState.value.durationMs }, { playerManager.isPlaying.value })
     }
 
     fun play() = playerManager.play()
@@ -252,20 +178,19 @@ class PlayerViewModel(
         isTogglingSubscription = true
         viewModelScope.launch {
             try {
-                val isSub = _uiState.value.isSubscribed
-                if (isSub) {
-                    subscriptionRepository.unsubscribe(details.channelId)
-                } else {
-                    subscriptionRepository.subscribe(
-                        SubscriptionEntity(
-                            channelId = details.channelId,
-                            channelName = details.channelName,
-                            avatarUrl = details.channelAvatarUrl
-                        )
+                subscriptionRepository.toggleSubscription(
+                    SubscriptionEntity(
+                        channelId = details.channelId,
+                        channelName = details.channelName,
+                        avatarUrl = details.channelAvatarUrl
                     )
+                ).onFailure {
+                    _uiState.update { it.copy(errorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
                 }
-            } catch (e: Exception) {
-                android.util.Log.w("PlayerViewModel", "Failed to toggle subscription", e)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.update { it.copy(errorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
             } finally {
                 isTogglingSubscription = false
             }
@@ -278,23 +203,22 @@ class PlayerViewModel(
         isTogglingWatchLater = true
         viewModelScope.launch {
             try {
-                val isSaved = _uiState.value.isSavedToWatchLater
-                if (isSaved) {
-                    watchLaterRepository.removeFromWatchLater(details.videoId)
-                } else {
-                    watchLaterRepository.addToWatchLater(
-                        WatchLaterEntity(
-                            videoId = details.videoId,
-                            title = details.title,
-                            channelId = details.channelId,
-                            channelName = details.channelName,
-                            thumbnailUrl = details.thumbnailUrl ?: details.channelAvatarUrl,
-                            durationMs = details.durationMs
-                        )
+                watchLaterRepository.toggleWatchLater(
+                    WatchLaterEntity(
+                        videoId = details.videoId,
+                        title = details.title,
+                        channelId = details.channelId,
+                        channelName = details.channelName,
+                        thumbnailUrl = details.thumbnailUrl ?: details.channelAvatarUrl,
+                        durationMs = details.durationMs
                     )
+                ).onFailure {
+                    _uiState.update { it.copy(errorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
                 }
-            } catch (e: Exception) {
-                android.util.Log.w("PlayerViewModel", "Failed to toggle watch later", e)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.update { it.copy(errorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
             } finally {
                 isTogglingWatchLater = false
             }
@@ -302,26 +226,22 @@ class PlayerViewModel(
     }
 
     fun persistCurrentPlaybackPosition() {
-        val vid = currentVideoId ?: return
-        val pos = _uiState.value.currentPositionMs
-        if (pos > 0L) {
-            viewModelScope.launch {
-                historyRepository.updatePlaybackPosition(vid, pos)
-            }
-        }
+        syncHelper.persistAsync(viewModelScope, currentVideoId, _uiState.value.currentPositionMs)
     }
 
     fun stopPlaybackTracking() {
-        historySyncJob?.cancel()
+        syncHelper.stop()
         persistCurrentPlaybackPosition()
     }
 
     override fun onCleared() {
         super.onCleared()
-        historySyncJob?.cancel()
+        syncHelper.stop()
         loadVideoJob?.cancel()
         subObserveJob?.cancel()
         watchLaterObserveJob?.cancel()
         channelVideosJob?.cancel()
+        collectorJobs.forEach { it.cancel() }
+        collectorJobs.clear()
     }
 }

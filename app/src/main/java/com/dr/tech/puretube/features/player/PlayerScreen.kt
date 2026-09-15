@@ -127,9 +127,6 @@ fun PlayerScreen(
 
             // Body: Metadata, Loading/Error, and Same-Channel Related List
             when {
-                uiState.isLoading -> {
-                    PureFeedShimmerList(count = 2, modifier = Modifier.weight(1f))
-                }
                 uiState.errorMessage != null -> {
                     PureErrorState(
                         title = "تعذر تشغيل الفيديو",
@@ -137,6 +134,9 @@ fun PlayerScreen(
                         onRetry = { viewModel.loadVideo(videoId, force = true) },
                         modifier = Modifier.weight(1f)
                     )
+                }
+                uiState.isLoading -> {
+                    PureFeedShimmerList(count = 2, modifier = Modifier.weight(1f))
                 }
                 uiState.videoDetails != null -> {
                     uiState.videoDetails?.let { details ->
@@ -166,6 +166,7 @@ fun PlayerScreen(
                         }
                     }
                 }
+                else -> { }
             }
         }
     }

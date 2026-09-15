@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.ServiceList
 
@@ -25,6 +28,7 @@ class SubscriptionRepository(
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
     var onSubscriptionsChanged: (suspend () -> Unit)? = null
 ) {
+    private val toggleMutex = Mutex()
     private val _subscriptionEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
     val subscriptionEvents: SharedFlow<Unit> = _subscriptionEvents.asSharedFlow()
 
@@ -40,11 +44,45 @@ class SubscriptionRepository(
 
     /**
      * Checks if a channel is subscribed reactively.
+     * Sole reactive source of subscription truth (single Room EXISTS query, Constitution VIII).
      */
     fun isSubscribed(channelId: String): Flow<Boolean> = subscriptionDao.isSubscribed(channelId)
 
     /**
+     * One-shot subscription check against the same single Room EXISTS query backing
+     * [isSubscribed]. Authoritative decision source for toggles — callers MUST NOT
+     * decide subscribe/unsubscribe from in-memory snapshots.
+     */
+    suspend fun isSubscribedOnce(channelId: String): Boolean = withContext(ioDispatcher) {
+        subscriptionDao.isSubscribed(channelId).first()
+    }
+
+    /**
+     * Atomically toggles subscription state from Room truth (no in-memory snapshot input).
+     * Serialized via [toggleMutex] so concurrent toggles cannot interleave; the
+     * subscribe/unsubscribe decision is always read from Room truth.
+     * Reuses the single [subscribe]/[unsubscribe] mutation path so change events stay unified.
+     * Returns [Result] with the new subscribed state (true = now subscribed).
+     */
+    suspend fun toggleSubscription(entity: SubscriptionEntity): Result<Boolean> =
+        withContext(ioDispatcher) {
+            toggleMutex.withLock {
+                runCatching {
+                    if (subscriptionDao.isSubscribed(entity.channelId).first()) {
+                        unsubscribe(entity.channelId)
+                        false
+                    } else {
+                        subscribe(entity)
+                        true
+                    }
+                }
+            }
+        }
+
+    /**
      * Returns the one-shot list of all subscriptions on Dispatchers.IO.
+     * Bulk-read only (export/seed flows) — NEVER scan this list to derive a single
+     * channel's subscription status; use [isSubscribed]/[isSubscribedOnce] instead.
      */
     suspend fun getAllSubscriptions(): List<SubscriptionEntity> = withContext(ioDispatcher) {
         subscriptionDao.getAll()
