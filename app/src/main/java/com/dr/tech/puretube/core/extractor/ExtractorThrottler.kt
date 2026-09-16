@@ -17,6 +17,7 @@ import java.io.IOException
 class ExtractorThrottler(
     maxConcurrentCalls: Int = 4
 ) {
+    init { require(maxConcurrentCalls in 1..4) { "maxConcurrentCalls must be 1..4, was $maxConcurrentCalls" } }
     private val semaphore = Semaphore(maxConcurrentCalls)
 
     /**
@@ -47,7 +48,7 @@ class ExtractorThrottler(
                     Result.failure(IOException("Extraction timed out after ${timeoutMillis}ms", e))
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Throwable) {
+                } catch (e: Exception) {
                     Result.failure(e)
                 }
             }

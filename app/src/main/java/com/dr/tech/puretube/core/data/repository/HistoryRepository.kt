@@ -23,9 +23,9 @@ class HistoryRepository(
 
     /**
      * Retrieves the full history entity for a video.
-     * Single authoritative row read for resume truth (Constitution VIII) — all
-     * per-video state derivations (e.g. [getPlaybackPosition]) funnel through here
-     * instead of issuing parallel queries for the same row.
+     * Single authoritative row read for full-row resume truth (Constitution VIII).
+     * Lightweight single-column reads use [getPlaybackPosition] directly to avoid
+     * a full-row fetch + nested dispatcher hop for the same row.
      */
     suspend fun getHistoryItem(videoId: String): HistoryEntity? = withContext(ioDispatcher) {
         historyDao.getById(videoId)
@@ -33,11 +33,11 @@ class HistoryRepository(
 
     /**
      * Retrieves the last playback position in milliseconds for exact resume.
-     * Derived from the single authoritative row read ([getHistoryItem]).
-     * Returns null or 0L if no prior record exists.
+     * Direct single-column query (no full-row fetch, no nested dispatcher hop).
+     * Returns null if no prior record exists.
      */
     suspend fun getPlaybackPosition(videoId: String): Long? = withContext(ioDispatcher) {
-        getHistoryItem(videoId)?.lastPlaybackPositionMs
+        historyDao.getPlaybackPosition(videoId)
     }
 
     /**

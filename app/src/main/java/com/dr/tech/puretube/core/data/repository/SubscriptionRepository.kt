@@ -5,6 +5,7 @@ import com.dr.tech.puretube.core.database.entity.SubscriptionEntity
 import com.dr.tech.puretube.core.extractor.ExtractorThrottler
 import com.dr.tech.puretube.core.extractor.pack.CuratedStarterPack
 import com.dr.tech.puretube.core.extractor.portability.ImportExportService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -59,25 +60,41 @@ class SubscriptionRepository(
 
     /**
      * Atomically toggles subscription state from Room truth (no in-memory snapshot input).
-     * Serialized via [toggleMutex] so concurrent toggles cannot interleave; the
-     * subscribe/unsubscribe decision is always read from Room truth.
-     * Reuses the single [subscribe]/[unsubscribe] mutation path so change events stay unified.
+     * Read + DAO mutation run atomically under [toggleMutex] on [ioDispatcher];
+     * only [notifySubscriptionsChanged] (arbitrary [onSubscriptionsChanged] callback)
+     * runs after lock release so the mutex is never held across it.
+     * Cancellation is rethrown (never swallowed into Result).
      * Returns [Result] with the new subscribed state (true = now subscribed).
      */
-    suspend fun toggleSubscription(entity: SubscriptionEntity): Result<Boolean> =
-        withContext(ioDispatcher) {
-            toggleMutex.withLock {
-                runCatching {
-                    if (subscriptionDao.isSubscribed(entity.channelId).first()) {
-                        unsubscribe(entity.channelId)
-                        false
+    suspend fun toggleSubscription(entity: SubscriptionEntity): Result<Boolean> {
+        val shouldSubscribe: Boolean = try {
+            withContext(ioDispatcher) {
+                toggleMutex.withLock {
+                    val subscribed = subscriptionDao.isSubscribed(entity.channelId).first()
+                    if (!subscribed) {
+                        subscriptionDao.insert(entity)
                     } else {
-                        subscribe(entity)
-                        true
+                        subscriptionDao.deleteById(entity.channelId)
                     }
+                    !subscribed
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return Result.failure(e)
         }
+        return try {
+            notifySubscriptionsChanged()
+            Result.success(shouldSubscribe)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Notify-only failure: DB already committed, don't report as toggle failure.
+            android.util.Log.w("SubscriptionRepository", "notify failed after toggle", e)
+            Result.success(shouldSubscribe)
+        }
+    }
 
     /**
      * Returns the one-shot list of all subscriptions on Dispatchers.IO.
@@ -129,44 +146,46 @@ class SubscriptionRepository(
     /**
      * Resolves channel metadata from YouTube using NewPipeExtractor under ExtractorThrottler.
      * Supports channel URLs, channel IDs, @handles, and direct video URLs (SPECIFICATION.md Section 4.A.2).
+     * Confined to [ioDispatcher]: extractor fetchPage does network + parsing, never Main.
      */
-    suspend fun fetchChannelDetails(channelUrlOrId: String): Result<SubscriptionEntity> {
-        val targetUrl = when {
-            channelUrlOrId.startsWith("http://") || channelUrlOrId.startsWith("https://") -> channelUrlOrId
-            channelUrlOrId.startsWith("@") -> "https://www.youtube.com/$channelUrlOrId"
-            else -> "https://www.youtube.com/channel/$channelUrlOrId"
-        }
-
-        return extractorThrottler.safeExtract {
-            val service = ServiceList.YouTube
-            val isVideoUrl = targetUrl.contains("watch?v=") || targetUrl.contains("youtu.be/") || targetUrl.contains("/shorts/")
-
-            val resolvedChannelUrl: String = if (isVideoUrl) {
-                val streamExtractor = service.getStreamExtractor(targetUrl)
-                streamExtractor.fetchPage()
-                streamExtractor.uploaderUrl?.takeIf { it.isNotBlank() } ?: targetUrl
-            } else {
-                targetUrl
+    suspend fun fetchChannelDetails(channelUrlOrId: String): Result<SubscriptionEntity> =
+        withContext(ioDispatcher) {
+            val targetUrl = when {
+                channelUrlOrId.startsWith("http://") || channelUrlOrId.startsWith("https://") -> channelUrlOrId
+                channelUrlOrId.startsWith("@") -> "https://www.youtube.com/$channelUrlOrId"
+                else -> "https://www.youtube.com/channel/$channelUrlOrId"
             }
 
-            val extractor = service.getChannelExtractor(resolvedChannelUrl)
-            extractor.fetchPage()
+            extractorThrottler.safeExtract {
+                val service = ServiceList.YouTube
+                val isVideoUrl = targetUrl.contains("watch?v=") || targetUrl.contains("youtu.be/") || targetUrl.contains("/shorts/")
 
-            val rawId = extractor.id?.ifBlank { null } ?: importExportService.extractChannelIdFromUrl(resolvedChannelUrl)
-            val channelId = rawId.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("Failed to extract valid channel ID from: $channelUrlOrId")
-            val channelName = extractor.name?.ifBlank { null } ?: channelId
+                val resolvedChannelUrl: String = if (isVideoUrl) {
+                    val streamExtractor = service.getStreamExtractor(targetUrl)
+                    streamExtractor.fetchPage()
+                    streamExtractor.uploaderUrl?.takeIf { it.isNotBlank() } ?: targetUrl
+                } else {
+                    targetUrl
+                }
 
-            SubscriptionEntity(
-                channelId = channelId,
-                channelName = channelName,
-                channelHandle = if (resolvedChannelUrl.contains("/@")) "@" + resolvedChannelUrl.substringAfter("/@").substringBefore("/").substringBefore("?").substringBefore("#") else null,
-                avatarUrl = extractor.avatars?.firstOrNull()?.url,
-                subscriberCountText = extractor.subscriberCount?.takeIf { it > 0 }?.let { "$it" },
-                isNotificationsEnabled = true,
-                subscribedAtMs = System.currentTimeMillis()
-            )
+                val extractor = service.getChannelExtractor(resolvedChannelUrl)
+                extractor.fetchPage()
+
+                val rawId = extractor.id?.ifBlank { null } ?: importExportService.extractChannelIdFromUrl(resolvedChannelUrl)
+                val channelId = rawId.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("Failed to extract valid channel ID from: $channelUrlOrId")
+                val channelName = extractor.name?.ifBlank { null } ?: channelId
+
+                SubscriptionEntity(
+                    channelId = channelId,
+                    channelName = channelName,
+                    channelHandle = if (resolvedChannelUrl.contains("/@")) "@" + resolvedChannelUrl.substringAfter("/@").substringBefore("/").substringBefore("?").substringBefore("#") else null,
+                    avatarUrl = extractor.avatars?.firstOrNull()?.url,
+                    subscriberCountText = extractor.subscriberCount?.takeIf { it > 0 }?.let { "$it" },
+                    isNotificationsEnabled = true,
+                    subscribedAtMs = System.currentTimeMillis()
+                )
+            }
         }
-    }
 
     /**
      * Imports subscriptions from NewPipe JSON format.

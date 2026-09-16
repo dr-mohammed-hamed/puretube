@@ -87,6 +87,15 @@ class MainActivity : ComponentActivity() {
         isInPipModeState.value = isInPictureInPictureMode
     }
 
+    /**
+     * Manifest declares configChanges (orientation|keyboard|fontScale|uiMode|layoutDirection|locale)
+     * to preserve ExoPlayer continuity. Compose recomposes automatically; non-Compose
+     * resources (PlayerView, notifications) keep current instances intentionally.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+    }
+
     private fun enterPipMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val builder = PictureInPictureParams.Builder()

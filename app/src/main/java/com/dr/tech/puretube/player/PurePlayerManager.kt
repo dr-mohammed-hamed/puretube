@@ -20,6 +20,8 @@ import com.dr.tech.puretube.core.data.repository.VideoDetailsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,7 +44,7 @@ class PurePlayerManager(
     private val videoDetailsRepository: VideoDetailsRepository,
     private val videoFrameHook: VideoFrameHook = NoOpVideoFrameHook(),
     private val audioFilterHook: AudioFilterHook = NoOpAudioFilterHook(),
-    private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.Main + Job())
+    private val coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 ) {
 
     val player: ExoPlayer = buildExoPlayer()
@@ -122,12 +124,16 @@ class PurePlayerManager(
         positionTrackerJob?.cancel()
         positionTrackerJob = coroutineScope.launch {
             while (isActive) {
-                if (player.isPlaying) {
-                    _currentPositionMs.value = player.currentPosition.coerceAtLeast(0L)
-                    val dur = player.duration
-                    if (dur > 0L) {
-                        _durationMs.value = dur
+                try {
+                    if (player.isPlaying) {
+                        _currentPositionMs.value = player.currentPosition.coerceAtLeast(0L)
+                        val dur = player.duration
+                        if (dur > 0L) {
+                            _durationMs.value = dur
+                        }
                     }
+                } catch (_: Exception) {
+                    // ExoPlayer released mid-loop: ignore, next tick retries.
                 }
                 delay(500)
             }
@@ -263,15 +269,17 @@ class PurePlayerManager(
             val savedPositionMs = player.currentPosition.coerceAtLeast(0L)
 
             coroutineScope.launch {
-                val refreshResult = videoDetailsRepository.extractVideoDetails(details.videoId)
-                refreshResult.onSuccess { freshDetails ->
-                    currentVideoDetails = freshDetails
+                try {
+                    val refreshResult = videoDetailsRepository.extractVideoDetails(details.videoId)
+                    refreshResult.onSuccess { freshDetails ->
+                        currentVideoDetails = freshDetails
+                        loadVideo(freshDetails, savedPositionMs)
+                    }.onFailure {
+                        forbiddenRetryCount = 0
+                        _errorMessage.value = "انتهت صلاحية الرابط وتعذر تجديده تلقائياً"
+                    }
+                } finally {
                     isRecoveringFrom403 = false
-                    loadVideo(freshDetails, savedPositionMs)
-                }.onFailure {
-                    isRecoveringFrom403 = false
-                    forbiddenRetryCount = 0
-                    _errorMessage.value = "انتهت صلاحية الرابط وتعذر تجديده تلقائياً"
                 }
             }
         } else {
@@ -281,6 +289,9 @@ class PurePlayerManager(
 
     fun release() {
         positionTrackerJob?.cancel()
+        // Never cancel the singleton scope Job itself (it would permanently
+        // break later launches); cancel children only.
+        coroutineScope.coroutineContext.cancelChildren()
         player.release()
     }
 }

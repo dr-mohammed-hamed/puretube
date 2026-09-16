@@ -8,6 +8,7 @@ import com.dr.tech.puretube.core.extractor.portability.ImportExportService
 import com.dr.tech.puretube.features.subscriptions.SubscriptionsViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -27,7 +28,7 @@ class SubscriptionsViewModelTest {
         override fun getAllFlow(): Flow<List<SubscriptionEntity>> = subsFlow
         override suspend fun getAll(): List<SubscriptionEntity> = subsFlow.value
         override fun isSubscribed(channelId: String): Flow<Boolean> =
-            MutableStateFlow(subsFlow.value.any { it.channelId == channelId })
+            subsFlow.map { list -> list.any { it.channelId == channelId } }
         override suspend fun insert(entity: SubscriptionEntity) {
             val list = subsFlow.value.toMutableList()
             list.removeAll { it.channelId == entity.channelId }

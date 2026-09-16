@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +20,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dr.tech.puretube.R
 import com.dr.tech.puretube.core.components.PureErrorState
 import com.dr.tech.puretube.core.components.PureFeedShimmerList
 import com.dr.tech.puretube.core.designsystem.theme.PureTheme
@@ -50,9 +54,24 @@ fun PlayerScreen(
     var areControlsVisible by remember { mutableStateOf(true) }
     var isSpeedSheetOpen by remember { mutableStateOf(false) }
     var isQualitySheetOpen by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val toggleErrorText = stringResource(R.string.player_toggle_error)
+    val extractErrorText = stringResource(R.string.player_error_extract)
+    val genericErrorText = stringResource(R.string.player_error_generic)
 
     LaunchedEffect(videoId) {
         viewModel.loadVideo(videoId)
+    }
+
+    LaunchedEffect(uiState.toggleErrorMessage) {
+        val msg = uiState.toggleErrorMessage
+        if (msg != null) {
+            try {
+                snackbarHostState.showSnackbar(msg.ifBlank { toggleErrorText })
+            } finally {
+                viewModel.clearToggleError()
+            }
+        }
     }
 
     DisposableEffect(Unit) {
@@ -80,7 +99,8 @@ fun PlayerScreen(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .background(PureTheme.colors.background)
+            .background(PureTheme.colors.background),
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -129,13 +149,16 @@ fun PlayerScreen(
             when {
                 uiState.errorMessage != null -> {
                     PureErrorState(
-                        title = "تعذر تشغيل الفيديو",
-                        message = uiState.errorMessage ?: "حدث خطأ غير متوقع",
+                        title = stringResource(R.string.player_error_title),
+                        message = when (val msg = uiState.errorMessage) {
+                            null -> genericErrorText
+                            "تعذر استخراج بيانات الفيديو" -> extractErrorText
+                            else -> msg.ifBlank { genericErrorText }
+                        },
                         onRetry = { viewModel.loadVideo(videoId, force = true) },
                         modifier = Modifier.weight(1f)
                     )
-                }
-                uiState.isLoading -> {
+                }                uiState.isLoading -> {
                     PureFeedShimmerList(count = 2, modifier = Modifier.weight(1f))
                 }
                 uiState.videoDetails != null -> {

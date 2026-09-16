@@ -2,6 +2,7 @@ package com.dr.tech.puretube.core.data.repository
 
 import com.dr.tech.puretube.core.database.dao.WatchLaterDao
 import com.dr.tech.puretube.core.database.entity.WatchLaterEntity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -44,14 +45,14 @@ class WatchLaterRepository(
 
     /**
      * Atomically toggles bookmark state from Room truth (no in-memory snapshot input).
-     * Serialized via [toggleMutex] so concurrent toggles cannot interleave; the
-     * add/remove decision is always read from Room truth.
+     * Read + DAO mutation run atomically under [toggleMutex] on [ioDispatcher].
+     * Cancellation is rethrown (never swallowed into Result).
      * Returns [Result] with the new saved state (true = now saved).
      */
-    suspend fun toggleWatchLater(entity: WatchLaterEntity): Result<Boolean> =
-        withContext(ioDispatcher) {
-            toggleMutex.withLock {
-                runCatching {
+    suspend fun toggleWatchLater(entity: WatchLaterEntity): Result<Boolean> {
+        return try {
+            val inserted = withContext(ioDispatcher) {
+                toggleMutex.withLock {
                     if (watchLaterDao.isInWatchLater(entity.videoId).first()) {
                         watchLaterDao.deleteById(entity.videoId)
                         false
@@ -61,7 +62,13 @@ class WatchLaterRepository(
                     }
                 }
             }
+            Result.success(inserted)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
         }
+    }
 
     /**
      * Adds or updates a video in Watch Later.

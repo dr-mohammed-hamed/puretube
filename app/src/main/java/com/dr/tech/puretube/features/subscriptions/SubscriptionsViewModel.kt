@@ -56,6 +56,8 @@ class SubscriptionsViewModel(
 
     /**
      * Resolves and subscribes to a channel via URL or @handle.
+     * Single-direction add (not a toggle): explicit user intent to subscribe.
+     * Player-screen toggles use [SubscriptionRepository.toggleSubscription] instead.
      */
     fun addChannel(urlOrHandle: String) {
         val trimmed = urlOrHandle.trim()
@@ -130,6 +132,7 @@ class SubscriptionsViewModel(
 
     /**
      * Confirms and executes channel unsubscription.
+     * Single-direction delete behind explicit confirmation dialog (not a toggle).
      */
     fun confirmUnsubscribe() {
         val channel = _uiState.value.channelPendingUnsubscribe ?: return

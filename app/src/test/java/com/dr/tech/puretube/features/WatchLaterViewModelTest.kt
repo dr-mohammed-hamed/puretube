@@ -6,6 +6,7 @@ import com.dr.tech.puretube.core.database.entity.WatchLaterEntity
 import com.dr.tech.puretube.features.watchlater.WatchLaterViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -23,7 +24,7 @@ class WatchLaterViewModelTest {
 
         override fun getAllFlow(): Flow<List<WatchLaterEntity>> = itemsFlow
         override fun isInWatchLater(videoId: String): Flow<Boolean> =
-            MutableStateFlow(itemsFlow.value.any { it.videoId == videoId })
+            itemsFlow.map { list -> list.any { it.videoId == videoId } }
 
         override suspend fun insert(entity: WatchLaterEntity) {
             val list = itemsFlow.value.toMutableList()

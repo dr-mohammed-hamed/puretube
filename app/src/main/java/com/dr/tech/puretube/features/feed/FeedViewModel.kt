@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * UI State for the Mindful Feed screen.
@@ -24,6 +25,7 @@ data class FeedUiState(
     val videos: List<FeedVideoItem> = emptyList(),
     val bookmarkedVideoIds: Set<String> = emptySet(),
     val errorMessage: String? = null,
+    val toggleErrorMessage: String? = null,
     val isEmptySubscriptions: Boolean = false
 )
 
@@ -41,7 +43,8 @@ class FeedViewModel(
     private val _uiState = MutableStateFlow(FeedUiState(isLoading = true))
     val uiState: StateFlow<FeedUiState> = _uiState.asStateFlow()
 
-    private var isFetchInProgress = false
+    private val isFetchInProgress = AtomicBoolean(false)
+    private val togglingIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     init {
         observeWatchLaterBookmarks()
@@ -83,8 +86,7 @@ class FeedViewModel(
     }
 
     private fun loadFeed(forceRefresh: Boolean) {
-        if (isFetchInProgress) return
-        isFetchInProgress = true
+        if (!isFetchInProgress.compareAndSet(false, true)) return
 
         val isInitial = _uiState.value.videos.isEmpty()
         _uiState.update {
@@ -95,7 +97,7 @@ class FeedViewModel(
             )
         }
 
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch {
             try {
                 val result = feedRepository.getFeed(forceRefresh = forceRefresh)
 
@@ -121,29 +123,23 @@ class FeedViewModel(
                     }
                 )
             } finally {
-                isFetchInProgress = false
+                isFetchInProgress.set(false)
             }
         }
     }
 
     /**
-     * Toggles bookmark status for a video in Watch Later.
-     * Applies optimistic state update to prevent rapid-tap race conditions (Subagent B Red-Teaming).
+     * Toggles bookmark status via the atomic Room-truth toggle.
+     * No optimistic in-memory write: UI converges through [observeWatchLaterBookmarks]
+     * so concurrent Feed + Player toggles cannot interleave past the repository mutex.
+     * Per-video in-flight guard drops accidental rapid double-taps for the same video
+     * while allowing parallel toggles for different videos.
      */
     fun toggleBookmark(video: FeedVideoItem) {
+        if (!togglingIds.add(video.videoId)) return
         viewModelScope.launch {
-            val currentlyBookmarked = _uiState.value.bookmarkedVideoIds.contains(video.videoId)
-            val updatedBookmarks = if (currentlyBookmarked) {
-                _uiState.value.bookmarkedVideoIds - video.videoId
-            } else {
-                _uiState.value.bookmarkedVideoIds + video.videoId
-            }
-            _uiState.update { it.copy(bookmarkedVideoIds = updatedBookmarks) }
-
-            if (currentlyBookmarked) {
-                watchLaterRepository.removeFromWatchLater(video.videoId)
-            } else {
-                watchLaterRepository.addToWatchLater(
+            try {
+                watchLaterRepository.toggleWatchLater(
                     WatchLaterEntity(
                         videoId = video.videoId,
                         title = video.title,
@@ -153,15 +149,24 @@ class FeedViewModel(
                         durationMs = video.durationMs,
                         addedAtMs = System.currentTimeMillis()
                     )
-                )
+                ).onFailure {
+                    _uiState.update { it.copy(toggleErrorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
+                }.onSuccess {
+                    _uiState.update { it.copy(toggleErrorMessage = null) }
+                }
+            } finally {
+                togglingIds.remove(video.videoId)
             }
         }
     }
 
+    fun clearToggleError() {
+        _uiState.update { it.copy(toggleErrorMessage = null) }
+    }
+
     /**
      * Activates the Curated Starter Pack when subscriptions are empty.
-     */
-    fun activateStarterPack() {
+     */    fun activateStarterPack() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             subscriptionRepository.reactivateStarterPack()

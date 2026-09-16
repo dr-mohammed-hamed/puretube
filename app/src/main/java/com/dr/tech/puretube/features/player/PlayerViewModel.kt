@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 data class PlayerUiState(
     val isLoading: Boolean = true,
@@ -35,13 +37,18 @@ data class PlayerUiState(
     val isSubscribed: Boolean = false,
     val isSavedToWatchLater: Boolean = false,
     val relatedVideos: List<FeedVideoItem> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val toggleErrorMessage: String? = null
 )
 
 /**
  * ViewModel managing player state, video details extraction, and database syncing.
  * History loop delegated to [PlayerPlaybackSyncHelper]. Constitution V/VI/IX:
  * viewModelScope only, debounce on toggles, zero double-bang, Result<T>, Long ms.
+ *
+ * Playback errors ([PlayerUiState.errorMessage]) and bookmark/subscription errors
+ * ([PlayerUiState.toggleErrorMessage]) use separate channels so a non-fatal toggle
+ * failure never presents as a full-screen playback failure.
  */
 class PlayerViewModel(
     val playerManager: PurePlayerManager,
@@ -55,14 +62,16 @@ class PlayerViewModel(
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     private var currentVideoId: String? = null
-    private val syncHelper = PlayerPlaybackSyncHelper(historyRepository)
+    private val syncHelper = PlayerPlaybackSyncHelper(historyRepository) { e ->
+        android.util.Log.w("PlayerViewModel", "history sync failed", e)
+    }
     private var loadVideoJob: Job? = null
     private var subObserveJob: Job? = null
     private var watchLaterObserveJob: Job? = null
     private var channelVideosJob: Job? = null
-    private val collectorJobs = mutableListOf<Job>()
-    private var isTogglingSubscription = false
-    private var isTogglingWatchLater = false
+    private val collectorJobs = CopyOnWriteArrayList<Job>()
+    private val togglingSubs = ConcurrentHashMap.newKeySet<String>()
+    private val togglingWatch = ConcurrentHashMap.newKeySet<String>()
 
     init {
         observePlayerManagerState()
@@ -88,45 +97,88 @@ class PlayerViewModel(
             if (!syncHelper.isSyncing) startHistorySync()
             return
         }
-        currentVideoId = videoId
-        _uiState.update { it.copy(isLoading = true, errorMessage = null, durationMs = 0L, videoDetails = null, relatedVideos = emptyList()) }
-        loadVideoJob?.cancel()
+        // Persist outgoing video position before switching (in-app related-list
+        // navigation reuses the ViewModel without disposing the screen).
+        val outgoingId = currentVideoId
+        val outgoingPos = _uiState.value.currentPositionMs
         syncHelper.stop()
+        if (outgoingId != null && outgoingId != videoId && outgoingPos > 0L) {
+            syncHelper.persistAsync(viewModelScope, outgoingId, outgoingPos)
+        }
+        currentVideoId = videoId
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                errorMessage = null,
+                toggleErrorMessage = null,
+                durationMs = 0L,
+                videoDetails = null,
+                relatedVideos = emptyList(),
+                isSubscribed = false,
+                isSavedToWatchLater = false
+            )
+        }
+        loadVideoJob?.cancel()
         subObserveJob?.cancel()
         watchLaterObserveJob?.cancel()
         channelVideosJob?.cancel()
         loadVideoJob = viewModelScope.launch {
             val requestId = videoId
-            val savedPosition = historyRepository.getPlaybackPosition(videoId) ?: 0L
+            val savedPosition = try {
+                historyRepository.getPlaybackPosition(videoId) ?: 0L
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("PlayerViewModel", "getPlaybackPosition failed for $videoId", e)
+                0L
+            }
             videoDetailsRepository.extractVideoDetails(videoId).onSuccess { details ->
                 if (requestId != currentVideoId) return@launch
                 _uiState.update { it.copy(isLoading = false, videoDetails = details, durationMs = details.durationMs) }
                 if (requestId != currentVideoId) return@launch
                 if (details.videoStreams.isNotEmpty() || details.audioStreams.isNotEmpty()) {
-                    historyRepository.recordPlayback(
-                        HistoryEntity(
-                            videoId = details.videoId,
-                            title = details.title,
-                            channelId = details.channelId,
-                            channelName = details.channelName,
-                            thumbnailUrl = details.thumbnailUrl ?: details.channelAvatarUrl,
-                            durationMs = details.durationMs,
-                            lastPlaybackPositionMs = savedPosition,
-                            lastPlayedAtMs = System.currentTimeMillis()
+                    try {
+                        historyRepository.recordPlayback(
+                            HistoryEntity(
+                                videoId = details.videoId,
+                                title = details.title,
+                                channelId = details.channelId,
+                                channelName = details.channelName,
+                                thumbnailUrl = details.thumbnailUrl ?: details.channelAvatarUrl,
+                                durationMs = details.durationMs,
+                                lastPlaybackPositionMs = savedPosition,
+                                lastPlayedAtMs = System.currentTimeMillis()
+                            )
                         )
-                    )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Best-effort: never abort playback, but keep observable.
+                        android.util.Log.w("PlayerViewModel", "recordPlayback failed for ${details.videoId}", e)
+                    }
                 }
                 if (requestId != currentVideoId) return@launch
-                observeChannelAndBookmarkState(details.channelId, details.videoId)
-                if (requestId != currentVideoId) return@launch
-                loadChannelVideos(details.channelId)
-                if (requestId != currentVideoId) return@launch
+                if (details.channelId.isNotBlank()) {
+                    observeChannelAndBookmarkState(details.channelId, details.videoId)
+                    if (requestId != currentVideoId) return@launch
+                    loadChannelVideos(details.channelId)
+                    if (requestId != currentVideoId) return@launch
+                }
                 playerManager.loadVideo(details, startPositionMs = savedPosition)
                 if (requestId != currentVideoId) return@launch
                 startHistorySync()
-            }.onFailure { error ->
+            }.onFailure {
                 if (requestId != currentVideoId) return@launch
-                _uiState.update { it.copy(isLoading = false, videoDetails = null, relatedVideos = emptyList(), errorMessage = error.localizedMessage ?: "تعذر استخراج بيانات الفيديو") }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        videoDetails = null,
+                        relatedVideos = emptyList(),
+                        isSubscribed = false,
+                        isSavedToWatchLater = false,
+                        errorMessage = "تعذر استخراج بيانات الفيديو"
+                    )
+                }
             }
         }
     }
@@ -134,11 +186,18 @@ class PlayerViewModel(
     private fun observeChannelAndBookmarkState(channelId: String, videoId: String) {
         subObserveJob?.cancel()
         watchLaterObserveJob?.cancel()
+        val requestVideoId = currentVideoId
         subObserveJob = viewModelScope.launch {
-            subscriptionRepository.isSubscribed(channelId).collect { sub -> _uiState.update { it.copy(isSubscribed = sub) } }
+            subscriptionRepository.isSubscribed(channelId).collect { sub ->
+                if (requestVideoId != currentVideoId) return@collect
+                _uiState.update { it.copy(isSubscribed = sub) }
+            }
         }
         watchLaterObserveJob = viewModelScope.launch {
-            watchLaterRepository.isInWatchLater(videoId).collect { saved -> _uiState.update { it.copy(isSavedToWatchLater = saved) } }
+            watchLaterRepository.isInWatchLater(videoId).collect { saved ->
+                if (requestVideoId != currentVideoId) return@collect
+                _uiState.update { it.copy(isSavedToWatchLater = saved) }
+            }
         }
     }
 
@@ -146,10 +205,16 @@ class PlayerViewModel(
         channelVideosJob?.cancel()
         val requestedVideoId = currentVideoId
         channelVideosJob = viewModelScope.launch {
-            videoDetailsRepository.getChannelVideos(channelId, limit = 15).onSuccess { list ->
-                if (requestedVideoId != currentVideoId) return@onSuccess
-                _uiState.update { it.copy(relatedVideos = list.filter { item -> item.videoId != currentVideoId }) }
-            }
+            videoDetailsRepository.getChannelVideos(channelId, limit = 15)
+                .onSuccess { list ->
+                    if (requestedVideoId != currentVideoId) return@onSuccess
+                    _uiState.update { it.copy(relatedVideos = list.filter { item -> item.videoId != currentVideoId }) }
+                }
+                .onFailure {
+                    android.util.Log.w("PlayerViewModel", "getChannelVideos failed for $channelId", it)
+                    // Non-fatal: keep empty related list, playback continues.
+                    if (requestedVideoId != currentVideoId) return@onFailure
+                }
         }
     }
 
@@ -173,9 +238,8 @@ class PlayerViewModel(
     fun setAudioOnly(enabled: Boolean) = playerManager.setAudioOnly(enabled)
 
     fun toggleSubscription() {
-        if (isTogglingSubscription) return
         val details = _uiState.value.videoDetails ?: return
-        isTogglingSubscription = true
+        if (!togglingSubs.add(details.channelId)) return
         viewModelScope.launch {
             try {
                 subscriptionRepository.toggleSubscription(
@@ -185,22 +249,23 @@ class PlayerViewModel(
                         avatarUrl = details.channelAvatarUrl
                     )
                 ).onFailure {
-                    _uiState.update { it.copy(errorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
+                    _uiState.update { it.copy(toggleErrorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
+                }.onSuccess {
+                    _uiState.update { it.copy(toggleErrorMessage = null) }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                _uiState.update { it.copy(errorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
+                _uiState.update { it.copy(toggleErrorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
             } finally {
-                isTogglingSubscription = false
+                togglingSubs.remove(details.channelId)
             }
         }
     }
 
     fun toggleWatchLater() {
-        if (isTogglingWatchLater) return
         val details = _uiState.value.videoDetails ?: return
-        isTogglingWatchLater = true
+        if (!togglingWatch.add(details.videoId)) return
         viewModelScope.launch {
             try {
                 watchLaterRepository.toggleWatchLater(
@@ -213,16 +278,22 @@ class PlayerViewModel(
                         durationMs = details.durationMs
                     )
                 ).onFailure {
-                    _uiState.update { it.copy(errorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
+                    _uiState.update { it.copy(toggleErrorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
+                }.onSuccess {
+                    _uiState.update { it.copy(toggleErrorMessage = null) }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                _uiState.update { it.copy(errorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
+                _uiState.update { it.copy(toggleErrorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
             } finally {
-                isTogglingWatchLater = false
+                togglingWatch.remove(details.videoId)
             }
         }
+    }
+
+    fun clearToggleError() {
+        _uiState.update { it.copy(toggleErrorMessage = null) }
     }
 
     fun persistCurrentPlaybackPosition() {

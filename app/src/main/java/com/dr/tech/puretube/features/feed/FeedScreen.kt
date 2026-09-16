@@ -1,4 +1,4 @@
-package com.dr.tech.puretube.features.feed
+﻿package com.dr.tech.puretube.features.feed
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,9 +21,16 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
+import com.dr.tech.puretube.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,10 +53,27 @@ fun FeedScreen(
     viewModel: FeedViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val toggleErrorText = stringResource(R.string.player_toggle_error)
 
+    LaunchedEffect(state.toggleErrorMessage) {
+        val msg = state.toggleErrorMessage
+        if (msg != null) {
+            try {
+                snackbarHostState.showSnackbar(msg.ifBlank { toggleErrorText })
+            } finally {
+                viewModel.clearToggleError()
+            }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { innerPadding ->
     Column(
         modifier = modifier
             .fillMaxSize()
+            .padding(innerPadding)
             .background(PureTheme.colors.background)
     ) {
         // Mindful Top App Header
@@ -125,6 +149,7 @@ fun FeedScreen(
                 }
             }
         }
+    }
     }
 }
 

@@ -27,9 +27,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -54,6 +56,7 @@ fun PlayerVideoSurface(
     var isForwardSeek by remember { mutableStateOf(true) }
     val currentOnSingleTap by rememberUpdatedState(onSingleTap)
     val currentOnDoubleTapSeek by rememberUpdatedState(onDoubleTapSeek)
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
     LaunchedEffect(seekIndicatorText) {
         if (seekIndicatorText != null) {
@@ -65,13 +68,15 @@ fun PlayerVideoSurface(
     Box(
         modifier = modifier
             .background(PureTheme.colors.background)
-            .pointerInput(Unit) {
+            .pointerInput(isRtl) {
                 detectTapGestures(
                     onTap = { currentOnSingleTap() },
                     onDoubleTap = { offset ->
                         val isRightSide = offset.x > (size.width / 2)
-                        // In RTL Arabic layout, right side = forward seek (+10s), left side = rewind (-10s)
-                        if (isRightSide) {
+                        // Logical model: forward follows layout direction.
+                        // LTR: right = forward. RTL: left = forward (mirrored).
+                        val isForward = if (isRtl) !isRightSide else isRightSide
+                        if (isForward) {
                             isForwardSeek = true
                             seekIndicatorText = "+10"
                             currentOnDoubleTapSeek(10_000L)
@@ -85,9 +90,8 @@ fun PlayerVideoSurface(
             },
         contentAlignment = Alignment.Center
     ) {
-        val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
         val indicatorAlignment = if (isRtl) {
-            if (isForwardSeek) Alignment.CenterStart else Alignment.CenterEnd
+            if (isForwardSeek) Alignment.CenterEnd else Alignment.CenterStart
         } else {
             if (isForwardSeek) Alignment.CenterEnd else Alignment.CenterStart
         }
@@ -158,14 +162,14 @@ fun PlayerVideoSurface(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             imageVector = if (isForwardSeek) Icons.Default.FastForward else Icons.Default.FastRewind,
-                            contentDescription = null,
+                            contentDescription = if (isForwardSeek) "تقديم 10 ثوان" else "تأخير 10 ثوان",
                             tint = PureTheme.colors.primary,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(32.dp).graphicsLayer(scaleX = if (isRtl) -1f else 1f)
                         )
                         Text(
                             text = text,
                             color = PureTheme.colors.textPrimary,
-                            style = PureTheme.typography.labelSmall.copy(fontSize = 13.sp)
+                            style = PureTheme.typography.labelSmall
                         )
                     }
                 }

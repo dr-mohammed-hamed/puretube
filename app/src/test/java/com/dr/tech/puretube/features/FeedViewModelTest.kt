@@ -13,6 +13,7 @@ import com.dr.tech.puretube.core.extractor.portability.ImportExportService
 import com.dr.tech.puretube.features.feed.FeedViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -30,7 +31,7 @@ class FeedViewModelTest {
         override fun getAllFlow(): Flow<List<SubscriptionEntity>> = subsFlow
         override suspend fun getAll(): List<SubscriptionEntity> = subsFlow.value
         override fun isSubscribed(channelId: String): Flow<Boolean> =
-            MutableStateFlow(subsFlow.value.any { it.channelId == channelId })
+            subsFlow.map { list -> list.any { it.channelId == channelId } }
         override suspend fun insert(entity: SubscriptionEntity) {
             val list = subsFlow.value.toMutableList()
             list.removeAll { it.channelId == entity.channelId }
@@ -53,7 +54,7 @@ class FeedViewModelTest {
         val wlFlow = MutableStateFlow<List<WatchLaterEntity>>(emptyList())
         override fun getAllFlow(): Flow<List<WatchLaterEntity>> = wlFlow
         override fun isInWatchLater(videoId: String): Flow<Boolean> =
-            MutableStateFlow(wlFlow.value.any { it.videoId == videoId })
+            wlFlow.map { list -> list.any { it.videoId == videoId } }
         override suspend fun insert(entity: WatchLaterEntity) {
             val list = wlFlow.value.toMutableList()
             list.removeAll { it.videoId == entity.videoId }
@@ -108,9 +109,11 @@ class FeedViewModelTest {
         val video = FeedVideoItem("v100", "Video 100", "c1", "Channel 1", null, 50000L, 1000L)
 
         viewModel.toggleBookmark(video)
+        testScheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.bookmarkedVideoIds.contains("v100"))
 
         viewModel.toggleBookmark(video)
+        testScheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.bookmarkedVideoIds.isEmpty())
     }
 
