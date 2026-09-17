@@ -15,3 +15,9 @@
 local.properties
 .idea/
 .kotlin/
+
+# Keystore & Signing Secrets
+*.jks
+*.keystore
+key.properties
+PureTube_Master_Secrets/

@@ -53,4 +53,12 @@ val featuresModule = module {
             watchLaterRepository = get()
         )
     }
+
+    viewModel {
+        com.dr.tech.puretube.features.channel.ChannelViewModel(
+            channelRepository = get(),
+            subscriptionRepository = get(),
+            watchLaterRepository = get()
+        )
+    }
 }

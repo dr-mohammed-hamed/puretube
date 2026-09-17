@@ -29,7 +29,8 @@ import com.dr.tech.puretube.features.watchlater.WatchLaterScreen
 @Composable
 fun MainNavigationShell(
     modifier: Modifier = Modifier,
-    onVideoClick: (String) -> Unit = {}
+    onVideoClick: (String) -> Unit = {},
+    onChannelClick: (String) -> Unit = {}
 ) {
     var currentTab by rememberSaveable { mutableStateOf(PureNavTab.FEED) }
 
@@ -59,9 +60,12 @@ fun MainNavigationShell(
             ) { targetTab ->
                 when (targetTab) {
                     PureNavTab.FEED -> FeedScreen(
-                        onVideoClick = onVideoClick
+                        onVideoClick = onVideoClick,
+                        onChannelClick = onChannelClick
                     )
-                    PureNavTab.SUBSCRIPTIONS -> SubscriptionsScreen()
+                    PureNavTab.SUBSCRIPTIONS -> SubscriptionsScreen(
+                        onChannelClick = onChannelClick
+                    )
                     PureNavTab.WATCH_LATER -> WatchLaterScreen(
                         onVideoClick = onVideoClick
                     )

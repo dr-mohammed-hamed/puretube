@@ -72,6 +72,7 @@ class SubscriptionsViewModelTest {
     @Test
     fun activateStarterPack_populatesSubscriptions() = runTest {
         viewModel.activateStarterPack()
+        testScheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.subscriptions.isNotEmpty())
         assertNotNull(viewModel.uiState.value.userNoticeMessage)
     }
@@ -80,12 +81,14 @@ class SubscriptionsViewModelTest {
     fun unsubscribeFlow_requestAndConfirm_removesChannel() = runTest {
         val channel = SubscriptionEntity("c_del", "Delete Channel", "@del", null, "10", true, 1000L)
         subDao.insert(channel)
+        testScheduler.advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.subscriptions.size)
 
         viewModel.requestUnsubscribe(channel)
         assertEquals(channel, viewModel.uiState.value.channelPendingUnsubscribe)
 
         viewModel.confirmUnsubscribe()
+        testScheduler.advanceUntilIdle()
         assertNull(viewModel.uiState.value.channelPendingUnsubscribe)
         assertTrue(viewModel.uiState.value.subscriptions.isEmpty())
     }

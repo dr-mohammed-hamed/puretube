@@ -1,6 +1,7 @@
 package com.dr.tech.puretube.features.player.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,7 +49,8 @@ fun VideoMetadataSection(
     isSavedToWatchLater: Boolean,
     modifier: Modifier = Modifier,
     onSubscribeToggle: () -> Unit,
-    onWatchLaterToggle: () -> Unit
+    onWatchLaterToggle: () -> Unit,
+    onChannelClick: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -103,7 +105,9 @@ fun VideoMetadataSection(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onChannelClick)
             ) {
                 if (!details.channelAvatarUrl.isNullOrBlank()) {
                     AsyncImage(

@@ -56,4 +56,10 @@ val repositoryModule = module {
             extractorThrottler = get()
         )
     }
+
+    single {
+        com.dr.tech.puretube.core.data.repository.ChannelRepository(
+            extractorThrottler = get()
+        )
+    }
 }

@@ -1,4 +1,4 @@
-﻿package com.dr.tech.puretube.features.feed
+package com.dr.tech.puretube.features.feed
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +49,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun FeedScreen(
     onVideoClick: (String) -> Unit = {},
+    onChannelClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: FeedViewModel = koinViewModel()
 ) {
@@ -142,7 +143,8 @@ fun FeedScreen(
                                 video = video,
                                 isBookmarked = video.videoId in state.bookmarkedVideoIds,
                                 onClick = { onVideoClick(video.videoId) },
-                                onBookmarkClick = { viewModel.toggleBookmark(video) }
+                                onBookmarkClick = { viewModel.toggleBookmark(video) },
+                                onChannelClick = onChannelClick
                             )
                         }
                     }

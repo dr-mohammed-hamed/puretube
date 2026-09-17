@@ -78,10 +78,12 @@ class WatchLaterViewModelTest {
         )
 
         repository.addToWatchLater(entity)
+        testScheduler.advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.items.size)
         assertEquals("Test Video", viewModel.uiState.value.items.first().title)
 
         viewModel.removeItem("v1")
+        testScheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.items.isEmpty())
     }
 
@@ -89,9 +91,11 @@ class WatchLaterViewModelTest {
     fun clearAll_removesAllItems() = runTest {
         repository.addToWatchLater(WatchLaterEntity("v1", "T1", "c1", "C1", null, 0L, 0L))
         repository.addToWatchLater(WatchLaterEntity("v2", "T2", "c2", "C2", null, 0L, 0L))
+        testScheduler.advanceUntilIdle()
 
         assertEquals(2, viewModel.uiState.value.items.size)
         viewModel.clearAll()
+        testScheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.items.isEmpty())
     }
 }

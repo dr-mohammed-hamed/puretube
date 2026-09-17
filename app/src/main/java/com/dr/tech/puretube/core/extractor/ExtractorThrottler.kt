@@ -48,8 +48,8 @@ class ExtractorThrottler(
                     Result.failure(IOException("Extraction timed out after ${timeoutMillis}ms", e))
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
-                    Result.failure(e)
+                } catch (t: Throwable) {
+                    Result.failure(t)
                 }
             }
         }

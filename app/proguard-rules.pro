@@ -1,21 +1,26 @@
 # Add project specific ProGuard rules here.
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve line numbers and source file names for debugging stack traces
+-keepattributes SourceFile,LineNumberTable
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# NewPipeExtractor reflection & internal parsers
+-keep class org.schabi.newpipe.extractor.** { *; }
+-keep interface org.schabi.newpipe.extractor.** { *; }
+-dontwarn org.schabi.newpipe.extractor.**
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Rhino JavaScript engine used by NewPipeExtractor
+-keep class org.mozilla.javascript.** { *; }
+-dontwarn org.mozilla.javascript.**
+
+# JSON & HTML parsers
+-keep class com.grack.nanojson.** { *; }
+-dontwarn com.grack.nanojson.**
+-keep class org.jsoup.** { *; }
+-dontwarn org.jsoup.**
+
+# PureTube Models (prevent field stripping for JSON/Room/Extractor)
+-keep class com.dr.tech.puretube.core.data.model.** { *; }
+-keep class com.dr.tech.puretube.core.database.entity.** { *; }
+-keep class com.dr.tech.puretube.core.extractor.pack.** { *; }

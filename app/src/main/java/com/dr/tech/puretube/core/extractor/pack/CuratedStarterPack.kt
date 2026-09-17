@@ -12,11 +12,11 @@ object CuratedStarterPack {
 
     val channels: List<SubscriptionEntity> = listOf(
         SubscriptionEntity(
-            channelId = "UCq4qX1L1N1yS1rL8B4L0j8g",
-            channelName = "تلاوات القرآن الكريم المختارة",
-            channelHandle = "@QuranRecitationsPure",
+            channelId = "@QuranRadio_ksa",
+            channelName = "إذاعة القرآن الكريم",
+            channelHandle = "@QuranRadio_ksa",
             avatarUrl = null,
-            subscriberCountText = "مجموعة مباركة",
+            subscriberCountText = "تلاوات وبرامج قرآنية مباركة",
             isNotificationsEnabled = true,
             subscribedAtMs = 1700000000005L
         ),

@@ -65,7 +65,7 @@ koin-androidx-compose = { group = "io.insert-koin", name = "koin-androidx-compos
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
 # Desugaring
-desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugarJdkLibs" }
 
 # Testing
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }

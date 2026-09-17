@@ -26,8 +26,7 @@ class SubscriptionRepository(
     private val subscriptionDao: SubscriptionDao,
     private val extractorThrottler: ExtractorThrottler,
     private val importExportService: ImportExportService,
-    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
-    var onSubscriptionsChanged: (suspend () -> Unit)? = null
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
 ) {
     private val toggleMutex = Mutex()
     private val _subscriptionEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
@@ -35,7 +34,6 @@ class SubscriptionRepository(
 
     private suspend fun notifySubscriptionsChanged() {
         _subscriptionEvents.tryEmit(Unit)
-        onSubscriptionsChanged?.invoke()
     }
 
     /**

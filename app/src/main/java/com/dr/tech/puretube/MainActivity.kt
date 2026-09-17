@@ -11,17 +11,41 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dr.tech.puretube.core.designsystem.theme.PureTheme
 import com.dr.tech.puretube.core.designsystem.theme.ThemePreferences
+import com.dr.tech.puretube.features.channel.ChannelScreen
 import com.dr.tech.puretube.features.navigation.MainNavigationShell
 import com.dr.tech.puretube.features.player.PlayerScreen
 import com.dr.tech.puretube.player.PurePlayerManager
 import org.koin.android.ext.android.inject
+
+/**
+ * Top-level destinations supported in PureTube backstack navigation.
+ */
+sealed interface ScreenDestination {
+    data object Shell : ScreenDestination
+    data class Player(val videoId: String) : ScreenDestination
+    data class Channel(val channelId: String) : ScreenDestination
+
+    companion object {
+        fun serialize(destination: ScreenDestination): String = when (destination) {
+            is Shell -> "shell"
+            is Player -> "player:${destination.videoId}"
+            is Channel -> "channel:${destination.channelId}"
+        }
+        fun deserialize(value: String): ScreenDestination = when {
+            value.startsWith("player:") -> Player(value.removePrefix("player:"))
+            value.startsWith("channel:") -> Channel(value.removePrefix("channel:"))
+            else -> Shell
+        }
+    }
+}
 
 /**
  * Main Activity hosting PureTube navigation and Media3 Picture-in-Picture lifecycle.
@@ -40,32 +64,73 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val currentPreset by themePreferences.currentPreset.collectAsStateWithLifecycle()
-            var activeVideoId by rememberSaveable { mutableStateOf<String?>(null) }
+            val backstack = rememberSaveable(
+                saver = listSaver(
+                    save = { stateList -> stateList.map { ScreenDestination.serialize(it) } },
+                    restore = { rawList ->
+                        mutableStateListOf<ScreenDestination>().apply {
+                            addAll(rawList.map { ScreenDestination.deserialize(it) })
+                        }
+                    }
+                )
+            ) { mutableStateListOf<ScreenDestination>(ScreenDestination.Shell) }
+
+            val navigateTo: (ScreenDestination) -> Unit = { destination ->
+                if (backstack.lastOrNull() != destination) {
+                    backstack.add(destination)
+                }
+            }
 
             PureTheme(preset = currentPreset) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = PureTheme.colors.background
                 ) {
-                    val currentActiveId = activeVideoId
-                    if (currentActiveId != null) {
-                        PlayerScreen(
-                            videoId = currentActiveId,
-                            isInPipMode = isInPipModeState.value,
-                            onEnterPip = { enterPipMode() },
-                            onBackClick = {
-                                if (!playerManager.isAudioOnly.value) {
-                                    playerManager.pause()
+                    when (val current = backstack.lastOrNull() ?: ScreenDestination.Shell) {
+                        is ScreenDestination.Player -> {
+                            PlayerScreen(
+                                videoId = current.videoId,
+                                isInPipMode = isInPipModeState.value,
+                                onEnterPip = { enterPipMode() },
+                                onBackClick = {
+                                    if (!playerManager.isAudioOnly.value) {
+                                        playerManager.pause()
+                                    }
+                                    if (backstack.size > 1) {
+                                        backstack.removeAt(backstack.lastIndex)
+                                    }
+                                },
+                                onChannelClick = { channelId ->
+                                    if (!playerManager.isAudioOnly.value) {
+                                        playerManager.pause()
+                                    }
+                                    navigateTo(ScreenDestination.Channel(channelId))
                                 }
-                                activeVideoId = null
-                            }
-                        )
-                    } else {
-                        MainNavigationShell(
-                            onVideoClick = { videoId ->
-                                activeVideoId = videoId
-                            }
-                        )
+                            )
+                        }
+                        is ScreenDestination.Channel -> {
+                            ChannelScreen(
+                                channelId = current.channelId,
+                                onBackClick = {
+                                    if (backstack.size > 1) {
+                                        backstack.removeAt(backstack.lastIndex)
+                                    }
+                                },
+                                onVideoClick = { videoId ->
+                                    navigateTo(ScreenDestination.Player(videoId))
+                                }
+                            )
+                        }
+                        is ScreenDestination.Shell -> {
+                            MainNavigationShell(
+                                onVideoClick = { videoId ->
+                                    navigateTo(ScreenDestination.Player(videoId))
+                                },
+                                onChannelClick = { channelId ->
+                                    navigateTo(ScreenDestination.Channel(channelId))
+                                }
+                            )
+                        }
                     }
                 }
             }

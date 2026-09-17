@@ -7,6 +7,7 @@ import com.dr.tech.puretube.core.data.repository.FeedRepository
 import com.dr.tech.puretube.core.data.repository.SubscriptionRepository
 import com.dr.tech.puretube.core.data.repository.WatchLaterRepository
 import com.dr.tech.puretube.core.database.entity.WatchLaterEntity
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,18 @@ class FeedViewModel(
     private val isFetchInProgress = AtomicBoolean(false)
     private val togglingIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        android.util.Log.e("FeedViewModel", "Unhandled coroutine error", throwable)
+        isFetchInProgress.set(false)
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                isRefreshing = false,
+                errorMessage = sanitizeErrorMessage(throwable)
+            )
+        }
+    }
+
     init {
         observeWatchLaterBookmarks()
         observeSubscriptions()
@@ -53,7 +66,7 @@ class FeedViewModel(
     }
 
     private fun observeWatchLaterBookmarks() {
-        viewModelScope.launch {
+        viewModelScope.launch(exceptionHandler) {
             watchLaterRepository.getWatchLaterFlow().collect { bookmarks ->
                 val idSet = bookmarks.map { it.videoId }.toSet()
                 _uiState.update { it.copy(bookmarkedVideoIds = idSet) }
@@ -62,7 +75,7 @@ class FeedViewModel(
     }
 
     private fun observeSubscriptions() {
-        viewModelScope.launch {
+        viewModelScope.launch(exceptionHandler) {
             subscriptionRepository.getSubscriptionsFlow().collect { subscriptions ->
                 val isEmpty = subscriptions.isEmpty()
                 val wasEmpty = _uiState.value.isEmptySubscriptions
@@ -97,7 +110,7 @@ class FeedViewModel(
             )
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(exceptionHandler) {
             try {
                 val result = feedRepository.getFeed(forceRefresh = forceRefresh)
 
@@ -117,7 +130,7 @@ class FeedViewModel(
                             it.copy(
                                 isLoading = false,
                                 isRefreshing = false,
-                                errorMessage = error.localizedMessage ?: "تعذر تحميل خلاصات القنوات. يرجى التحقق من الاتصال."
+                                errorMessage = sanitizeErrorMessage(error)
                             )
                         }
                     }
@@ -137,7 +150,7 @@ class FeedViewModel(
      */
     fun toggleBookmark(video: FeedVideoItem) {
         if (!togglingIds.add(video.videoId)) return
-        viewModelScope.launch {
+        viewModelScope.launch(exceptionHandler) {
             try {
                 watchLaterRepository.toggleWatchLater(
                     WatchLaterEntity(
@@ -167,10 +180,30 @@ class FeedViewModel(
     /**
      * Activates the Curated Starter Pack when subscriptions are empty.
      */    fun activateStarterPack() {
-        viewModelScope.launch {
+        viewModelScope.launch(exceptionHandler) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             subscriptionRepository.reactivateStarterPack()
             loadFeed(forceRefresh = true)
+        }
+    }
+
+    /**
+     * Sanitizes internal exceptions into dignified, user-friendly Arabic explanations
+     * according to Constitution Principles IV and VII. Prevents raw JVM LinkageError /
+     * NoSuchMethodError signatures from surfacing in the presentation layer.
+     */
+    private fun sanitizeErrorMessage(error: Throwable): String {
+        android.util.Log.e("FeedViewModel", "Feed fetch failed", error)
+        val raw = error.localizedMessage.orEmpty()
+        return when {
+            error is java.lang.LinkageError || raw.contains("NoSuchMethodError") || raw.contains("URLEncoder") ->
+                "تعذر تحميل الخلاصة بسبب عدم توافق في النظام، يرجى تحديث التطبيق أو إعادة المحاولة."
+            error is java.net.UnknownHostException || error is java.net.SocketTimeoutException || raw.contains("timeout", ignoreCase = true) ->
+                "تعذر الاتصال بالإنترنت لجلب الخلاصات. يرجى التحقق من الاتصال والمحاولة مجدداً."
+            raw.isNotBlank() && !raw.contains("java.", ignoreCase = true) && !raw.contains("class L", ignoreCase = true) ->
+                raw
+            else ->
+                "تعذر تحميل خلاصات القنوات حالياً. يرجى إعادة المحاولة."
         }
     }
 }

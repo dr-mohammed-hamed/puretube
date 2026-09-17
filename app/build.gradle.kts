@@ -1,7 +1,21 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
+}
+
+val keystorePropertiesFile = rootProject.file("key.properties").takeIf { it.exists() }
+    ?: rootProject.file("PureTube_Master_Secrets/01_android_keys/key.properties").takeIf { it.exists() }
+val keystoreProperties = Properties().apply {
+    keystorePropertiesFile?.reader(Charsets.UTF_8)?.use { load(it) }
+}
+
+fun getKeystoreProp(key: String): String? {
+    return keystoreProperties.getProperty(key)
+        ?: keystoreProperties.entries.firstOrNull { it.key.toString().trim() == key }?.value?.toString()?.trim()
 }
 
 android {
@@ -20,9 +34,32 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile != null && keystorePropertiesFile.exists()) {
+                val storeFilePath = getKeystoreProp("storeFile")
+                val resolvedStoreFile = if (storeFilePath != null) {
+                    val candidate = rootProject.file(storeFilePath)
+                    if (candidate.exists()) candidate else file(storeFilePath)
+                } else null
+
+                storeFile = resolvedStoreFile
+                storePassword = getKeystoreProp("storePassword")
+                keyAlias = getKeystoreProp("keyAlias")
+                keyPassword = getKeystoreProp("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = if (keystorePropertiesFile != null && keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -36,6 +73,9 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 

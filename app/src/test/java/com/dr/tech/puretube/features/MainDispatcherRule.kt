@@ -18,6 +18,10 @@ class MainDispatcherRule(
     }
 
     override fun finished(description: Description) {
-        Dispatchers.resetMain()
+        try {
+            Dispatchers.resetMain()
+        } catch (_: Throwable) {
+            // Keep testDispatcher active on headless JVM if Android main looper is missing
+        }
     }
 }

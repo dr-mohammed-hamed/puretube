@@ -48,7 +48,8 @@ fun PlayerScreen(
     isInPipMode: Boolean = false,
     viewModel: PlayerViewModel = koinViewModel(),
     onEnterPip: () -> Unit = {},
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onChannelClick: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var areControlsVisible by remember { mutableStateOf(true) }
@@ -174,7 +175,8 @@ fun PlayerScreen(
                                     isSubscribed = uiState.isSubscribed,
                                     isSavedToWatchLater = uiState.isSavedToWatchLater,
                                     onSubscribeToggle = { viewModel.toggleSubscription() },
-                                    onWatchLaterToggle = { viewModel.toggleWatchLater() }
+                                    onWatchLaterToggle = { viewModel.toggleWatchLater() },
+                                    onChannelClick = { onChannelClick(details.channelId) }
                                 )
                             }
 

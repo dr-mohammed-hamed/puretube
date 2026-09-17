@@ -112,33 +112,6 @@ class SubscriptionRepositoryTest {
         assertEquals(CuratedStarterPack.channels.size, dao.getCount())
     }
 
-    @Test
-    fun subscriptionMutations_triggerOnSubscriptionsChangedCallback() = runTest {
-        var callbackCount = 0
-        repository.onSubscriptionsChanged = {
-            callbackCount++
-        }
-
-        val testChannel = SubscriptionEntity(
-            channelId = "UC_callback_test",
-            channelName = "قناة اختبار الإشعار"
-        )
-
-        repository.subscribe(testChannel)
-        assertEquals(1, callbackCount)
-
-        repository.unsubscribe("UC_callback_test")
-        assertEquals(2, callbackCount)
-
-        repository.reactivateStarterPack()
-        assertEquals(3, callbackCount)
-
-        // Verify seeding on empty triggers callback
-        dao.deleteById("UC_callback_test")
-        dao.list.clear()
-        repository.checkAndSeedStarterPackIfEmpty()
-        assertEquals(4, callbackCount)
-    }
 
     @Test
     fun subscriptionMutations_emitSubscriptionEventsSharedFlow() = runTest {

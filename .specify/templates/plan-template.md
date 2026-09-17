@@ -43,10 +43,11 @@
 - [ ] **Gate 1: Anti-Addiction & Intentionality** (No automated recommendations, trending feeds, or algorithmic doomscrolling).
 - [ ] **Gate 2: AI Safety Hooks** (`VideoFrameHook` and `AudioFilterHook` modularity preserved with zero-copy NoOp overhead in V1).
 - [ ] **Gate 3: Privacy & Offline-First SSOT** (Room DB is authoritative SSOT for persistent data; expiring streaming URLs isolated in-memory).
-- [ ] **Gate 4: Network Resilience & Temporal Precision** (Semaphore(4) throttling, DASH stream merging, all durations/seek offsets in `Long` milliseconds).
-- [ ] **Gate 5: File Length & 4-Tier Blueprint** (Hard 1,000 LOC ceiling, <300 LOC target, flexible Screen + ViewModel + components/ extraction, zero God-Composables).
-- [ ] **Gate 6: Zero-Emoji & Theme Compliance** (Zero Unicode emojis in system UI, `PureTheme.colors.*` semantic tokens only, RTL-first Cairo typography).
-- [ ] **Gate 7: Coroutines & Null-Safety Discipline** (Scoping to `viewModelScope`, UI debounce on async triggers, zero `!!` operators, `Result<T>` error wrapping).
+- [ ] **Gate 4: Network Resilience, NIO Desugaring & Universal Throwable Safety** (Semaphore(4) throttling, DASH stream merging, mandatory `desugar_jdk_libs_nio` for Java 11/NIO and network parity across API 24–32, universal Throwable catching in safeExtract wrappers to protect against JVM bytecode linkage errors, all durations/seek offsets in `Long` milliseconds).
+- [ ] **Gate 5: File Length & Screen Header Contract** (Hard 1,000 LOC ceiling, <300 LOC target, Unified Screen Header Contract via custom headers with `statusBarsPadding()`, zero isolated Material 3 `TopAppBar` under edge-to-edge).
+- [ ] **Gate 6: Zero-Emoji, Presentation Error Sanitization & Theme Compliance** (Zero Unicode emojis in system UI, zero raw JVM stack traces or NoSuchMethodError strings leaked to Compose UI, mandatory Arabic error sanitization with Logcat routing, `PureTheme.colors.*` semantic tokens only, RTL-first Cairo typography).
+- [ ] **Gate 7: Coroutines & Circuit Breakers** (Mandatory `CoroutineExceptionHandler` on async ViewModel jobs, scoping to `viewModelScope`, UI debounce on async triggers, zero `!!` operators, `Result<T>` error wrapping).
+- [ ] **Gate 8: Seed Data & Curated Pack Integrity** (All bundled/seeded channels, handles, and entity IDs verified against real YouTube endpoints; zero fictitious or placeholder seed IDs).
 
 ## Project Structure
 

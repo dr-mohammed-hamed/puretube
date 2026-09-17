@@ -13,5 +13,6 @@ data class FeedVideoItem(
     val thumbnailUrl: String? = null,
     val durationMs: Long = 0L,
     val uploadDateMs: Long = 0L,
-    val uploadDateText: String? = null
+    val uploadDateText: String? = null,
+    val viewCount: Long = 0L
 )
