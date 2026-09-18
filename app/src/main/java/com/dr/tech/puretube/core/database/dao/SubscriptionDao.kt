@@ -20,8 +20,22 @@ interface SubscriptionDao {
     @Query("SELECT * FROM subscriptions ORDER BY subscribedAtMs DESC")
     suspend fun getAll(): List<SubscriptionEntity>
 
-    @Query("SELECT EXISTS(SELECT 1 FROM subscriptions WHERE channelId = :channelId)")
-    fun isSubscribed(channelId: String): Flow<Boolean>
+    @Query("""
+        SELECT EXISTS(
+            SELECT 1 FROM subscriptions 
+            WHERE channelId = :channelId 
+               OR channelHandle = :channelId 
+               OR channelHandle = ('@' || :channelId) 
+               OR ('@' || channelHandle) = :channelId
+               OR (:handle IS NOT NULL AND (
+                   channelId = :handle 
+                   OR channelHandle = :handle 
+                   OR channelHandle = ('@' || :handle) 
+                   OR ('@' || channelHandle) = :handle
+               ))
+        )
+    """)
+    fun isSubscribed(channelId: String, handle: String? = null): Flow<Boolean>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: SubscriptionEntity)
@@ -29,8 +43,20 @@ interface SubscriptionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<SubscriptionEntity>)
 
-    @Query("DELETE FROM subscriptions WHERE channelId = :channelId")
-    suspend fun deleteById(channelId: String): Int
+    @Query("""
+        DELETE FROM subscriptions 
+        WHERE channelId = :channelId 
+           OR channelHandle = :channelId 
+           OR channelHandle = ('@' || :channelId) 
+           OR ('@' || channelHandle) = :channelId
+           OR (:handle IS NOT NULL AND (
+               channelId = :handle 
+               OR channelHandle = :handle 
+               OR channelHandle = ('@' || :handle) 
+               OR ('@' || channelHandle) = :handle
+           ))
+    """)
+    suspend fun deleteById(channelId: String, handle: String? = null): Int
 
     @Query("SELECT COUNT(*) FROM subscriptions")
     suspend fun getCount(): Int

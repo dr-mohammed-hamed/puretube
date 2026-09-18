@@ -27,8 +27,8 @@ class SubscriptionsViewModelTest {
         val subsFlow = MutableStateFlow<List<SubscriptionEntity>>(emptyList())
         override fun getAllFlow(): Flow<List<SubscriptionEntity>> = subsFlow
         override suspend fun getAll(): List<SubscriptionEntity> = subsFlow.value
-        override fun isSubscribed(channelId: String): Flow<Boolean> =
-            subsFlow.map { list -> list.any { it.channelId == channelId } }
+        override fun isSubscribed(channelId: String, handle: String?): Flow<Boolean> =
+            subsFlow.map { list -> list.any { it.channelId == channelId || it.channelHandle == channelId || it.channelId == handle || it.channelHandle == handle } }
         override suspend fun insert(entity: SubscriptionEntity) {
             val list = subsFlow.value.toMutableList()
             list.removeAll { it.channelId == entity.channelId }
@@ -43,9 +43,9 @@ class SubscriptionsViewModelTest {
             }
             subsFlow.value = list
         }
-        override suspend fun deleteById(channelId: String): Int {
+        override suspend fun deleteById(channelId: String, handle: String?): Int {
             val list = subsFlow.value.toMutableList()
-            val removed = list.removeAll { it.channelId == channelId }
+            val removed = list.removeAll { it.channelId == channelId || it.channelHandle == channelId || it.channelId == handle || it.channelHandle == handle }
             subsFlow.value = list
             return if (removed) 1 else 0
         }

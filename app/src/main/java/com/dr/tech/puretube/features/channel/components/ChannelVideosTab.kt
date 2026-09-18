@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dr.tech.puretube.core.components.PureEmptyState
+import com.dr.tech.puretube.core.components.PureErrorState
 import com.dr.tech.puretube.core.components.PureVideoCard
 import com.dr.tech.puretube.core.components.PureVideoCardShimmer
 import com.dr.tech.puretube.core.data.model.ChannelSortOrder
@@ -46,7 +47,9 @@ fun ChannelVideosTab(
     onSortOrderChanged: (ChannelSortOrder) -> Unit,
     onVideoClick: (String) -> Unit,
     onBookmarkClick: (FeedVideoItem) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    errorMessage: String? = null,
+    onRetry: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -107,6 +110,21 @@ fun ChannelVideosTab(
                     repeat(3) {
                         PureVideoCardShimmer()
                     }
+                }
+            }
+
+            errorMessage != null && videos.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    PureErrorState(
+                        title = "تعذر تحميل مقاطع الفيديو",
+                        message = errorMessage,
+                        onRetry = onRetry ?: {}
+                    )
                 }
             }
 

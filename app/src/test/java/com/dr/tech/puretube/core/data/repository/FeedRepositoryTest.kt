@@ -24,8 +24,8 @@ class FeedRepositoryTest {
 
         override fun getAllFlow(): Flow<List<SubscriptionEntity>> = flowOf(subscriptions)
         override suspend fun getAll(): List<SubscriptionEntity> = subscriptions
-        override fun isSubscribed(channelId: String): Flow<Boolean> =
-            flowOf(subscriptions.any { it.channelId == channelId })
+        override fun isSubscribed(channelId: String, handle: String?): Flow<Boolean> =
+            flowOf(subscriptions.any { it.channelId == channelId || it.channelHandle == channelId || it.channelId == handle || it.channelHandle == handle })
 
         override suspend fun insert(entity: SubscriptionEntity) {
             subscriptions.removeAll { it.channelId == entity.channelId }
@@ -36,8 +36,8 @@ class FeedRepositoryTest {
             entities.forEach { insert(it) }
         }
 
-        override suspend fun deleteById(channelId: String): Int {
-            val removed = subscriptions.removeAll { it.channelId == channelId }
+        override suspend fun deleteById(channelId: String, handle: String?): Int {
+            val removed = subscriptions.removeAll { it.channelId == channelId || it.channelHandle == channelId || it.channelId == handle || it.channelHandle == handle }
             return if (removed) 1 else 0
         }
 

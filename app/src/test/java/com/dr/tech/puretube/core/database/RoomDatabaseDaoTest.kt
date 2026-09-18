@@ -71,6 +71,9 @@ class RoomDatabaseDaoTest {
         assertEquals("UC12345", all.first().channelId)
 
         assertTrue(subscriptionDao.isSubscribed("UC12345").first())
+        assertTrue(subscriptionDao.isSubscribed("@Hadef").first())
+        assertTrue(subscriptionDao.isSubscribed("Hadef").first())
+        assertTrue(subscriptionDao.isSubscribed("otherId", "@Hadef").first())
         assertFalse(subscriptionDao.isSubscribed("UC99999").first())
 
         val deleted = subscriptionDao.deleteById("UC12345")

@@ -65,8 +65,10 @@ fun ChannelScreen(
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
-            viewModel.clearError()
+            if (uiState.videos.isNotEmpty() || uiState.playlists.isNotEmpty() || uiState.liveStreams.isNotEmpty()) {
+                snackbarHostState.showSnackbar(msg)
+                viewModel.clearError()
+            }
         }
     }
 
@@ -167,7 +169,9 @@ fun ChannelScreen(
                                             bookmarkedVideoIds = uiState.bookmarkedVideoIds,
                                             onSortOrderChanged = { viewModel.changeSortOrder(it) },
                                             onVideoClick = onVideoClick,
-                                            onBookmarkClick = { viewModel.toggleBookmark(it) }
+                                            onBookmarkClick = { viewModel.toggleBookmark(it) },
+                                            errorMessage = uiState.errorMessage,
+                                            onRetry = { viewModel.refresh() }
                                         )
                                     }
                                     ChannelTabType.PLAYLISTS -> {
@@ -185,7 +189,9 @@ fun ChannelScreen(
                                             bookmarkedVideoIds = uiState.bookmarkedVideoIds,
                                             onSortOrderChanged = {},
                                             onVideoClick = onVideoClick,
-                                            onBookmarkClick = { viewModel.toggleBookmark(it) }
+                                            onBookmarkClick = { viewModel.toggleBookmark(it) },
+                                            errorMessage = uiState.errorMessage,
+                                            onRetry = { viewModel.refresh() }
                                         )
                                     }
                                     ChannelTabType.ABOUT -> {

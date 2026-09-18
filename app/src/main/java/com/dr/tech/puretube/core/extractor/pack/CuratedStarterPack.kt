@@ -21,7 +21,7 @@ object CuratedStarterPack {
             subscribedAtMs = 1700000000005L
         ),
         SubscriptionEntity(
-            channelId = "UCfiwzLy-8yKzIbsmZTzxDgw",
+            channelId = "@AljazeeraDocumentary",
             channelName = "الجزيرة الوثائقية",
             channelHandle = "@AljazeeraDocumentary",
             avatarUrl = null,
@@ -30,7 +30,7 @@ object CuratedStarterPack {
             subscribedAtMs = 1700000000004L
         ),
         SubscriptionEntity(
-            channelId = "UCrZdmsZhnvSmsMZZzT89aKg",
+            channelId = "@DroosOnline4u",
             channelName = "دروس أونلاين",
             channelHandle = "@DroosOnline4u",
             avatarUrl = null,
@@ -39,7 +39,7 @@ object CuratedStarterPack {
             subscribedAtMs = 1700000000003L
         ),
         SubscriptionEntity(
-            channelId = "UCAuXQ_S4U36y8gGj9Q9_hPQ",
+            channelId = "@AliMuhammadAli",
             channelName = "علي محمد علي",
             channelHandle = "@AliMuhammadAli",
             avatarUrl = null,
@@ -48,7 +48,7 @@ object CuratedStarterPack {
             subscribedAtMs = 1700000000002L
         ),
         SubscriptionEntity(
-            channelId = "UCe9W2Cwbq0L1V9yGZ7LhX9Q",
+            channelId = "@HsoubAcademy",
             channelName = "أكاديمية حسوب",
             channelHandle = "@HsoubAcademy",
             avatarUrl = null,
@@ -57,11 +57,11 @@ object CuratedStarterPack {
             subscribedAtMs = 1700000000001L
         ),
         SubscriptionEntity(
-            channelId = "UC_x5XG1OV2P6uZZ5FSM9Ttw",
-            channelName = "TED بالعربي",
-            channelHandle = "@TEDArabic",
+            channelId = "@Thmanyah",
+            channelName = "ثمانية",
+            channelHandle = "@Thmanyah",
             avatarUrl = null,
-            subscriberCountText = "أفكار تستحق الانتشار",
+            subscriberCountText = "وثائقيات وبودكاست هادف",
             isNotificationsEnabled = true,
             subscribedAtMs = 1700000000000L
         )

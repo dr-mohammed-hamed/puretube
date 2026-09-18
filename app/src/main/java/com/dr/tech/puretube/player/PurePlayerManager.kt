@@ -8,6 +8,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import com.dr.tech.puretube.core.aibridge.AudioFilterHook
@@ -180,13 +181,10 @@ class PurePlayerManager(
     private fun startPlaybackService() {
         try {
             val intent = android.content.Intent(context, PurePlaybackService::class.java)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            Util.startForegroundService(context, intent)
         } catch (e: Exception) {
-            // Guard against background start restrictions
+            // Guard against background start restrictions with diagnostic logging
+            android.util.Log.w("PurePlayerManager", "Could not start foreground playback service", e)
         }
     }
 

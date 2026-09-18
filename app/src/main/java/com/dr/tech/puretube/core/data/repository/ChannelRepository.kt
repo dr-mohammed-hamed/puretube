@@ -1,5 +1,6 @@
 package com.dr.tech.puretube.core.data.repository
 
+import android.util.Log
 import com.dr.tech.puretube.core.data.model.ChannelPlaylistItem
 import com.dr.tech.puretube.core.data.model.ChannelProfileDetails
 import com.dr.tech.puretube.core.data.model.ChannelSortOrder
@@ -50,16 +51,21 @@ open class ChannelRepository(
         forceRefresh: Boolean = false
     ): Result<ChannelProfileDetails> = withContext(ioDispatcher) {
         val targetUrl = resolveChannelUrl(channelIdOrUrl)
+        Log.d(TAG, "getChannelProfile called for '$channelIdOrUrl' (targetUrl: $targetUrl, forceRefresh: $forceRefresh)")
 
         if (!forceRefresh) {
             cacheMutex.withLock {
                 val cached = profileCache[targetUrl] ?: profileCache[channelIdOrUrl]
-                if (cached != null) return@withContext Result.success(cached)
+                if (cached != null) {
+                    Log.d(TAG, "Serving channel profile from cache for '$channelIdOrUrl'")
+                    return@withContext Result.success(cached)
+                }
             }
         }
 
         extractorThrottler.safeExtract {
             val service = ServiceList.YouTube
+            Log.d(TAG, "--> Extracting channel profile from YouTube: $targetUrl")
             val extractor = service.getChannelExtractor(targetUrl)
             extractor.fetchPage()
 
@@ -75,6 +81,8 @@ open class ChannelRepository(
             val subscriberCountText = if (subscriberCount > 0L) "$subscriberCount" else null
             val description = try { extractor.description } catch (_: Throwable) { null }
             val isVerified = try { extractor.isVerified } catch (_: Throwable) { false }
+
+            Log.d(TAG, "<-- Channel profile loaded: name='$name', id='$rawId', handle='$handle', subscribers=$subscriberCount")
 
             val profile = ChannelProfileDetails(
                 channelId = rawId,
@@ -97,6 +105,8 @@ open class ChannelRepository(
             }
 
             profile
+        }.onFailure { err ->
+            Log.e(TAG, "getChannelProfile failed for '$channelIdOrUrl': ${err.javaClass.simpleName} - ${err.message}", err)
         }
     }
 
@@ -110,9 +120,13 @@ open class ChannelRepository(
         limit: Int = 50
     ): Result<List<FeedVideoItem>> = withContext(ioDispatcher) {
         val targetUrl = resolveChannelUrl(channelIdOrUrl)
+        Log.d(TAG, "getChannelVideos called for '$channelIdOrUrl' (targetUrl: $targetUrl, sortOrder: $sortOrder, forceRefresh: $forceRefresh)")
 
         val rawVideos: List<FeedVideoItem> = if (!forceRefresh) {
             val cached = cacheMutex.withLock { videosCache[targetUrl] ?: videosCache[channelIdOrUrl] }
+            if (cached != null) {
+                Log.d(TAG, "Serving ${cached.size} channel videos from cache for '$channelIdOrUrl'")
+            }
             cached ?: fetchAndCacheVideos(targetUrl, channelIdOrUrl, limit).getOrElse { return@withContext Result.failure(it) }
         } else {
             fetchAndCacheVideos(targetUrl, channelIdOrUrl, limit).getOrElse { return@withContext Result.failure(it) }
@@ -148,13 +162,22 @@ open class ChannelRepository(
         limit: Int
     ): Result<List<FeedVideoItem>> = extractorThrottler.safeExtract {
         val service = ServiceList.YouTube
+        Log.d(TAG, "--> fetchAndCacheVideos for '$channelKey' (URL: $targetUrl)")
         val channelExtractor = service.getChannelExtractor(targetUrl)
         channelExtractor.fetchPage()
 
         val tabs = try { channelExtractor.tabs ?: emptyList() } catch (_: Throwable) { emptyList() }
-        val videoTabHandler = tabs.firstOrNull {
-            it.url?.contains("video", ignoreCase = true) == true
-        } ?: tabs.firstOrNull() ?: throw java.io.IOException("لم يتم العثور على محتوى مرئي للقناة")
+        Log.d(TAG, "Channel '$channelKey': discovered ${tabs.size} tabs")
+
+        val videoTabHandler = tabs.firstOrNull { tab ->
+            val u = tab.url
+            u != null && (u.contains("video", ignoreCase = true) || u.contains("/videos"))
+        } ?: tabs.firstOrNull { tab ->
+            val u = tab.url
+            u != null && !u.contains("community", ignoreCase = true) && !u.contains("about", ignoreCase = true) && !u.contains("playlists", ignoreCase = true)
+        } ?: throw java.io.IOException("لم يتم العثور على محتوى مرئي للقناة")
+
+        Log.d(TAG, "Channel '$channelKey': Selected tab URL '${videoTabHandler.url}' (id: ${videoTabHandler.id})")
 
         val tabExtractor = service.getChannelTabExtractor(videoTabHandler)
         tabExtractor.fetchPage()
@@ -162,6 +185,7 @@ open class ChannelRepository(
         val initialPage = tabExtractor.initialPage
             ?: throw org.schabi.newpipe.extractor.exceptions.ExtractionException("تعذر استخراج الصفحة الأولى لمقاطع الفيديو")
         val items = initialPage.items ?: emptyList()
+        Log.d(TAG, "Channel '$channelKey': initialPage returned ${items.size} raw items")
 
         val channelName = try { channelExtractor.name ?: "" } catch (_: Throwable) { "" }
         val channelId = try { channelExtractor.id ?: channelKey } catch (_: Throwable) { channelKey }
@@ -201,6 +225,8 @@ open class ChannelRepository(
             )
         }
 
+        Log.d(TAG, "<-- Channel '$channelKey': Successfully parsed ${videos.size} videos")
+
         if (videos.isNotEmpty()) {
             cacheMutex.withLock {
                 videosCache[targetUrl] = videos
@@ -209,6 +235,8 @@ open class ChannelRepository(
         }
 
         videos
+    }.onFailure { err ->
+        Log.e(TAG, "<-- Channel '$channelKey' fetchAndCacheVideos failed: ${err.javaClass.simpleName} - ${err.message}", err)
     }
 
     /**
@@ -380,5 +408,9 @@ open class ChannelRepository(
             liveCache.remove(targetUrl)
             liveCache.remove(channelIdOrUrl)
         }
+    }
+
+    companion object {
+        private const val TAG = "PureTube-Channel"
     }
 }

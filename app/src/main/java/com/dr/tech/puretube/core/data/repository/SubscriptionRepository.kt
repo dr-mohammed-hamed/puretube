@@ -45,15 +45,16 @@ class SubscriptionRepository(
      * Checks if a channel is subscribed reactively.
      * Sole reactive source of subscription truth (single Room EXISTS query, Constitution VIII).
      */
-    fun isSubscribed(channelId: String): Flow<Boolean> = subscriptionDao.isSubscribed(channelId)
+    fun isSubscribed(channelId: String, handle: String? = null): Flow<Boolean> =
+        subscriptionDao.isSubscribed(channelId, handle)
 
     /**
      * One-shot subscription check against the same single Room EXISTS query backing
      * [isSubscribed]. Authoritative decision source for toggles — callers MUST NOT
      * decide subscribe/unsubscribe from in-memory snapshots.
      */
-    suspend fun isSubscribedOnce(channelId: String): Boolean = withContext(ioDispatcher) {
-        subscriptionDao.isSubscribed(channelId).first()
+    suspend fun isSubscribedOnce(channelId: String, handle: String? = null): Boolean = withContext(ioDispatcher) {
+        subscriptionDao.isSubscribed(channelId, handle).first()
     }
 
     /**
@@ -68,11 +69,12 @@ class SubscriptionRepository(
         val shouldSubscribe: Boolean = try {
             withContext(ioDispatcher) {
                 toggleMutex.withLock {
-                    val subscribed = subscriptionDao.isSubscribed(entity.channelId).first()
+                    val subscribed = subscriptionDao.isSubscribed(entity.channelId, entity.channelHandle).first()
                     if (!subscribed) {
+                        subscriptionDao.deleteById(entity.channelId, entity.channelHandle)
                         subscriptionDao.insert(entity)
                     } else {
-                        subscriptionDao.deleteById(entity.channelId)
+                        subscriptionDao.deleteById(entity.channelId, entity.channelHandle)
                     }
                     !subscribed
                 }
@@ -129,15 +131,16 @@ class SubscriptionRepository(
      * Subscribes to a channel.
      */
     suspend fun subscribe(entity: SubscriptionEntity) = withContext(ioDispatcher) {
+        subscriptionDao.deleteById(entity.channelId, entity.channelHandle)
         subscriptionDao.insert(entity)
         notifySubscriptionsChanged()
     }
 
     /**
-     * Unsubscribes from a channel by ID.
+     * Unsubscribes from a channel by ID and optional handle.
      */
-    suspend fun unsubscribe(channelId: String) = withContext(ioDispatcher) {
-        subscriptionDao.deleteById(channelId)
+    suspend fun unsubscribe(channelId: String, handle: String? = null) = withContext(ioDispatcher) {
+        subscriptionDao.deleteById(channelId, handle)
         notifySubscriptionsChanged()
     }
 

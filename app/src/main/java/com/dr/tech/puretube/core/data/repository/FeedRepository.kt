@@ -84,18 +84,24 @@ class FeedRepository(
                     val now = System.currentTimeMillis()
                     val valid = cachedFeed?.takeIf { now - lastFetchedTimestampMs < cacheTtlMs }
                     if (valid != null) {
+                        android.util.Log.d(TAG, "Serving feed from valid cache (${valid.size} videos, age: ${now - lastFetchedTimestampMs}ms)")
                         return@withContext Result.success(valid)
                     }
                 }
             }
 
+            android.util.Log.d(TAG, "Starting feed fetch (forceRefresh=$forceRefresh)...")
+
             runCatching {
                 val subscriptions = subscriptionDao.getAll()
+                android.util.Log.d(TAG, "Subscribed channels in database: ${subscriptions.size}")
+
                 if (subscriptions.isEmpty()) {
                     cacheMutex.withLock {
                         cachedFeed = emptyList()
                         lastFetchedTimestampMs = System.currentTimeMillis()
                     }
+                    android.util.Log.d(TAG, "No subscriptions present, returning empty feed.")
                     return@runCatching emptyList<FeedVideoItem>()
                 }
 
@@ -111,6 +117,15 @@ class FeedRepository(
                 }
 
                 val successfulFetches = channelResults.filter { it.isSuccess }
+                val failedFetches = channelResults.filter { it.isFailure }
+
+                android.util.Log.d(TAG, "Feed channels fetch completed: ${successfulFetches.size}/${subscriptions.size} succeeded, ${failedFetches.size} failed.")
+
+                if (failedFetches.isNotEmpty()) {
+                    failedFetches.forEachIndexed { index, result ->
+                        android.util.Log.w(TAG, "Channel fetch failure #${index + 1}: ${result.exceptionOrNull()?.message}")
+                    }
+                }
 
                 // In case all channel fetches fail and subscriptions are not empty:
                 // - If cachedFeed is not null and not empty, DO NOT overwrite it with empty list; return cachedFeed!
@@ -118,15 +133,18 @@ class FeedRepository(
                 if (successfulFetches.isEmpty() && subscriptions.isNotEmpty()) {
                     val fallback = cacheMutex.withLock { cachedFeed }
                     if (!fallback.isNullOrEmpty()) {
+                        android.util.Log.w(TAG, "All channels failed, falling back to existing cache (${fallback.size} videos).")
                         return@runCatching fallback
                     }
 
                     val firstError = channelResults.firstOrNull { it.isFailure }?.exceptionOrNull()
                         ?: IOException("Failed to fetch feed from all subscribed channels")
+                    android.util.Log.e(TAG, "All channels failed and no cache exists: ${firstError.message}")
                     throw firstError
                 }
 
                 val allVideos = successfulFetches.flatMap { it.getOrDefault(emptyList()) }
+                android.util.Log.d(TAG, "Total extracted videos across all channels: ${allVideos.size}")
 
                 // Sort reverse-chronologically (newest uploads first)
                 val sorted = allVideos.sortedWith(
@@ -140,12 +158,15 @@ class FeedRepository(
                     lastFetchedTimestampMs = System.currentTimeMillis()
                 }
 
+                android.util.Log.d(TAG, "Feed ready: ${sorted.size} videos cached successfully.")
                 sorted
             }.recoverCatching { error ->
+                android.util.Log.e(TAG, "Feed fetch failed with exception: ${error.message}", error)
                 // In case of total network failure, return existing cache if available rather than crashing
                 cacheMutex.withLock {
                     val fallback = cachedFeed
                     if (!fallback.isNullOrEmpty()) {
+                        android.util.Log.w(TAG, "Recovering from error using cache (${fallback.size} videos).")
                         return@recoverCatching fallback
                     }
                 }
@@ -163,23 +184,40 @@ class FeedRepository(
         channelName: String
     ): Result<List<FeedVideoItem>> {
         val targetUrl = resolveChannelUrl(channelId)
+        android.util.Log.d(TAG, "--> Fetching channel: '$channelName' (ID: $channelId, URL: $targetUrl)")
+
         return extractorThrottler.safeExtract {
             val service = ServiceList.YouTube
             val channelExtractor = service.getChannelExtractor(targetUrl)
             channelExtractor.fetchPage()
 
             val tabs = channelExtractor.tabs ?: emptyList()
-            val videoTabHandler = tabs.firstOrNull {
-                it.url.contains("video", ignoreCase = true)
-            } ?: tabs.firstOrNull() ?: return@safeExtract emptyList<FeedVideoItem>()
+            android.util.Log.d(TAG, "Channel '$channelName': discovered ${tabs.size} tabs")
+
+            val videoTabHandler = tabs.firstOrNull { tab ->
+                val u = tab.url
+                u != null && (u.contains("video", ignoreCase = true) || u.contains("/videos"))
+            } ?: tabs.firstOrNull { tab ->
+                val u = tab.url
+                u != null && !u.contains("community", ignoreCase = true) && !u.contains("about", ignoreCase = true) && !u.contains("playlists", ignoreCase = true)
+            }
+
+            if (videoTabHandler == null) {
+                android.util.Log.w(TAG, "Channel '$channelName': No suitable video tab found among ${tabs.size} tabs")
+                throw java.io.IOException("لم يتم العثور على تبويب الفيديوهات للقناة $channelName")
+            }
+
+            android.util.Log.d(TAG, "Channel '$channelName': Selected tab URL '${videoTabHandler.url}' (id: ${videoTabHandler.id})")
 
             val tabExtractor = service.getChannelTabExtractor(videoTabHandler)
             tabExtractor.fetchPage()
 
-            val initialPage = tabExtractor.initialPage ?: return@safeExtract emptyList<FeedVideoItem>()
-            val items = initialPage.items ?: return@safeExtract emptyList<FeedVideoItem>()
+            val initialPage = tabExtractor.initialPage
+                ?: throw org.schabi.newpipe.extractor.exceptions.ExtractionException("تعذر استخراج الصفحة الأولى لمقاطع الفيديو للقناة $channelName")
+            val items = initialPage.items ?: emptyList()
+            android.util.Log.d(TAG, "Channel '$channelName': initialPage returned ${items.size} raw items")
 
-            items.filterIsInstance<StreamInfoItem>().mapNotNull { item: StreamInfoItem ->
+            val videos = items.filterIsInstance<StreamInfoItem>().mapNotNull { item: StreamInfoItem ->
                 val rawUrl = item.url ?: return@mapNotNull null
                 val videoId = extractVideoId(rawUrl)
                 if (videoId.isBlank()) return@mapNotNull null
@@ -208,15 +246,24 @@ class FeedRepository(
                     uploadDateText = item.textualUploadDate
                 )
             }
+
+            android.util.Log.d(TAG, "<-- Channel '$channelName': Successfully extracted ${videos.size} videos")
+            videos
+        }.onFailure { err ->
+            android.util.Log.e(TAG, "<-- Channel '$channelName' ($channelId) extraction failed: ${err.javaClass.simpleName} - ${err.message}", err)
         }
     }
 
     companion object {
+        private const val TAG = "PureTube-Feed"
+
         fun resolveChannelUrl(channelId: String): String {
+            val trimmed = channelId.trim().trimEnd('/')
             return when {
-                channelId.startsWith("http://") || channelId.startsWith("https://") -> channelId
-                channelId.startsWith("@") -> "https://www.youtube.com/$channelId"
-                else -> "https://www.youtube.com/channel/$channelId"
+                trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+                trimmed.startsWith("@") -> "https://www.youtube.com/$trimmed"
+                trimmed.startsWith("UC") -> "https://www.youtube.com/channel/$trimmed"
+                else -> "https://www.youtube.com/@$trimmed"
             }
         }
 

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dr.tech.puretube.core.components.PureEmptyState
 import com.dr.tech.puretube.core.components.PureErrorState
 import com.dr.tech.puretube.core.components.PureFeedShimmerList
 import com.dr.tech.puretube.core.components.PureVideoCard
@@ -108,6 +110,17 @@ fun FeedScreen(
                         title = "تعذر تحميل الخلاصات",
                         message = state.errorMessage ?: "حدث خطأ غير متوقع",
                         onRetry = { viewModel.refresh(force = true) },
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
+                state.videos.isEmpty() -> {
+                    PureEmptyState(
+                        icon = Icons.Outlined.VideoLibrary,
+                        title = "لا توجد مقاطع فيديو في خلاصتك",
+                        description = "لم تقم القنوات المشترك بها بنشر مقاطع جديدة مؤخراً، أو اسحب للأسفل لتحديث الخلاصة.",
+                        actionLabel = "تحديث الخلاصة",
+                        onActionClick = { viewModel.refresh(force = true) },
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }

@@ -37,10 +37,10 @@ class SettingsViewModelTest {
     private class FakeSubDao : SubscriptionDao {
         override fun getAllFlow(): Flow<List<SubscriptionEntity>> = flowOf(emptyList())
         override suspend fun getAll(): List<SubscriptionEntity> = emptyList()
-        override fun isSubscribed(channelId: String): Flow<Boolean> = flowOf(false)
+        override fun isSubscribed(channelId: String, handle: String?): Flow<Boolean> = flowOf(false)
         override suspend fun insert(entity: SubscriptionEntity) {}
         override suspend fun insertAll(entities: List<SubscriptionEntity>) {}
-        override suspend fun deleteById(channelId: String): Int = 0
+        override suspend fun deleteById(channelId: String, handle: String?): Int = 0
         override suspend fun getCount(): Int = 5
     }
 

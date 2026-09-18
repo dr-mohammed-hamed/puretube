@@ -27,8 +27,14 @@ class SubscriptionRepositoryTest {
 
         override fun getAllFlow(): Flow<List<SubscriptionEntity>> = flowOf(list.toList())
         override suspend fun getAll(): List<SubscriptionEntity> = list.toList()
-        override fun isSubscribed(channelId: String): Flow<Boolean> =
-            flowOf(list.any { it.channelId == channelId })
+        override fun isSubscribed(channelId: String, handle: String?): Flow<Boolean> =
+            flowOf(list.any {
+                it.channelId == channelId ||
+                it.channelHandle == channelId ||
+                it.channelHandle == "@$channelId" ||
+                "@${it.channelHandle}" == channelId ||
+                (handle != null && (it.channelId == handle || it.channelHandle == handle || it.channelHandle == "@$handle" || "@${it.channelHandle}" == handle))
+            })
 
         override suspend fun insert(entity: SubscriptionEntity) {
             list.removeAll { it.channelId == entity.channelId }
@@ -39,8 +45,14 @@ class SubscriptionRepositoryTest {
             entities.forEach { insert(it) }
         }
 
-        override suspend fun deleteById(channelId: String): Int {
-            val removed = list.removeAll { it.channelId == channelId }
+        override suspend fun deleteById(channelId: String, handle: String?): Int {
+            val removed = list.removeAll {
+                it.channelId == channelId ||
+                it.channelHandle == channelId ||
+                it.channelHandle == "@$channelId" ||
+                "@${it.channelHandle}" == channelId ||
+                (handle != null && (it.channelId == handle || it.channelHandle == handle || it.channelHandle == "@$handle" || "@${it.channelHandle}" == handle))
+            }
             return if (removed) 1 else 0
         }
 
@@ -134,5 +146,27 @@ class SubscriptionRepositoryTest {
         assertEquals(2, eventCount)
 
         job.cancel()
+    }
+
+    @Test
+    fun subscribeWithHandle_allowsQueryAndUnsubscribeByEitherHandleOrCanonicalId() = runTest {
+        val handleChannel = SubscriptionEntity(
+            channelId = "@AljazeeraDocumentary",
+            channelName = "الجزيرة الوثائقية",
+            channelHandle = "@AljazeeraDocumentary"
+        )
+        repository.subscribe(handleChannel)
+
+        // Query by handle
+        assertTrue(repository.isSubscribed("@AljazeeraDocumentary").first())
+        // Query by bare handle (without @)
+        assertTrue(repository.isSubscribed("AljazeeraDocumentary").first())
+        // Query by canonical ID while providing handle
+        assertTrue(repository.isSubscribed("UCfiwzLy-8yKzIbsmZTzxDgw", "@AljazeeraDocumentary").first())
+
+        // Unsubscribe using canonical ID + handle
+        repository.unsubscribe("UCfiwzLy-8yKzIbsmZTzxDgw", "@AljazeeraDocumentary")
+        assertFalse(repository.isSubscribed("@AljazeeraDocumentary").first())
+        assertEquals(0, repository.getAllSubscriptions().size)
     }
 }

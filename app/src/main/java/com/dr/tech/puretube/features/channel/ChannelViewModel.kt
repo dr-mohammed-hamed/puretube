@@ -113,10 +113,7 @@ class ChannelViewModel(
             channelRepository.getChannelProfile(channelKey, forceRefresh)
                 .onSuccess { profile ->
                     _uiState.update { it.copy(profile = profile, isLoadingProfile = false) }
-                    // If channel ID resolved to actual UC ID, observe that as well
-                    if (profile.channelId != channelKey) {
-                        observeSubscription(profile.channelId)
-                    }
+                    observeSubscription(profile.channelId, profile.channelHandle ?: channelKey)
                 }
                 .onFailure { error ->
                     _uiState.update { it.copy(isLoadingProfile = false, errorMessage = sanitizeErrorMessage(error)) }
@@ -156,10 +153,10 @@ class ChannelViewModel(
         }
     }
 
-    private fun observeSubscription(channelId: String) {
+    private fun observeSubscription(channelId: String, handle: String? = null) {
         subObserveJob?.cancel()
         subObserveJob = viewModelScope.launch(exceptionHandler) {
-            subscriptionRepository.isSubscribed(channelId).collect { isSub ->
+            subscriptionRepository.isSubscribed(channelId, handle).collect { isSub ->
                 _uiState.update { it.copy(isSubscribed = isSub) }
             }
         }
@@ -182,7 +179,7 @@ class ChannelViewModel(
             _uiState.update { it.copy(isActionInProgress = true) }
             try {
                 if (_uiState.value.isSubscribed) {
-                    subscriptionRepository.unsubscribe(profile.channelId)
+                    subscriptionRepository.unsubscribe(profile.channelId, profile.channelHandle ?: currentChannelKey)
                 } else {
                     val entity = SubscriptionEntity(
                         channelId = profile.channelId,

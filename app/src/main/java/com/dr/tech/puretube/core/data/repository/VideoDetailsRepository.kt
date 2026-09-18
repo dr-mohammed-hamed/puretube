@@ -139,9 +139,13 @@ class VideoDetailsRepositoryImpl(
             channelExtractor.fetchPage()
 
             val tabs = channelExtractor.tabs ?: emptyList()
-            val videoTabHandler = tabs.firstOrNull {
-                it.url.contains("video", ignoreCase = true)
-            } ?: tabs.firstOrNull() ?: return@safeExtract emptyList<FeedVideoItem>()
+            val videoTabHandler = tabs.firstOrNull { tab ->
+                val u = tab.url
+                u != null && (u.contains("video", ignoreCase = true) || u.contains("/videos"))
+            } ?: tabs.firstOrNull { tab ->
+                val u = tab.url
+                u != null && !u.contains("community", ignoreCase = true) && !u.contains("about", ignoreCase = true) && !u.contains("playlists", ignoreCase = true)
+            } ?: return@safeExtract emptyList<FeedVideoItem>()
 
             val tabExtractor = service.getChannelTabExtractor(videoTabHandler)
             tabExtractor.fetchPage()

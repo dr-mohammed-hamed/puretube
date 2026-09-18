@@ -139,7 +139,7 @@ class SubscriptionsViewModel(
         _uiState.update { it.copy(channelPendingUnsubscribe = null) }
 
         viewModelScope.launch {
-            subscriptionRepository.unsubscribe(channel.channelId)
+            subscriptionRepository.unsubscribe(channel.channelId, channel.channelHandle)
             _uiState.update {
                 it.copy(userNoticeMessage = "تم إلغاء الاشتراك من '${channel.channelName}'")
             }
