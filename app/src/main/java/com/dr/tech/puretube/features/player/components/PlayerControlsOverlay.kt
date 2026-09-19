@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -26,30 +28,25 @@ import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Speed
-import com.dr.tech.puretube.features.player.sheets.SleepTimerOption
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.dr.tech.puretube.core.data.model.PlaybackQuality
 import com.dr.tech.puretube.core.designsystem.theme.PureTheme
-import java.util.Locale
+import com.dr.tech.puretube.features.player.sheets.SleepTimerOption
 
 /**
- * Overlay rendering custom player controls, timeline slider, and action buttons.
+ * Overlay rendering custom player controls, timeline slider, video title, and action buttons.
  * Conforms to Constitution Principles V, VI, VII:
- * Zero emojis, PureTheme semantic tokens, < 300 LOC.
+ * Zero emojis, PureTheme semantic tokens, safe insets, < 250 LOC.
  */
 @Composable
 fun PlayerControlsOverlay(
@@ -63,23 +60,23 @@ fun PlayerControlsOverlay(
     playbackSpeed: Float,
     isZoomToFill: Boolean = false,
     activeSleepTimer: SleepTimerOption = SleepTimerOption.OFF,
+    videoTitle: String = "",
+    channelName: String = "",
+    isFullscreen: Boolean = false,
     modifier: Modifier = Modifier,
     onPlayPauseClick: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onSeekRelative: (Long) -> Unit,
+    onScrubbingChange: (Boolean) -> Unit = {},
     onAudioOnlyToggle: () -> Unit,
     onSpeedClick: () -> Unit,
     onQualityClick: () -> Unit,
     onSleepTimerClick: () -> Unit = {},
     onZoomToFillToggle: () -> Unit = {},
+    onFullscreenToggle: () -> Unit = {},
     onPipClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
-    var draggingPositionMs by remember { mutableStateOf<Float?>(null) }
-    val durationFloat = remember(durationMs) { durationMs.toFloat().coerceAtLeast(1f) }
-    val sliderPosition = draggingPositionMs ?: currentPositionMs.toFloat().coerceIn(0f, durationFloat)
-    val displayPositionMs = (draggingPositionMs?.toLong() ?: currentPositionMs).coerceIn(0L, durationMs.coerceAtLeast(0L))
-
     AnimatedVisibility(
         visible = isVisible,
         enter = fadeIn(),
@@ -90,86 +87,93 @@ fun PlayerControlsOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .background(PureTheme.colors.background.copy(alpha = 0.65f))
-                .padding(8.dp)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
-            // 1. Top Bar: Navigation & Player Options
+            // 1. Top Bar: Navigation, Video Info (in fullscreen), & Player Options
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.TopCenter),
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier.size(38.dp)
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "الرجوع",
-                        tint = PureTheme.colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    IconButton(
+                        onClick = onBackClick,
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "الرجوع",
+                            tint = PureTheme.colors.textPrimary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    if (isFullscreen && videoTitle.isNotBlank()) {
+                        Column(modifier = Modifier.padding(end = 8.dp)) {
+                            Text(
+                                text = videoTitle,
+                                style = PureTheme.typography.bodyMedium,
+                                color = PureTheme.colors.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (channelName.isNotBlank()) {
+                                Text(
+                                    text = channelName,
+                                    style = PureTheme.typography.labelSmall,
+                                    color = PureTheme.colors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    // Audio-Only Toggle
-                    IconButton(onClick = onAudioOnlyToggle, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Headphones,
-                            contentDescription = "صوتي فقط",
-                            tint = if (isAudioOnly) PureTheme.colors.primary else PureTheme.colors.textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    // Quality Selection
-                    IconButton(onClick = onQualityClick, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.HighQuality,
-                            contentDescription = "الجودة",
-                            tint = PureTheme.colors.textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    // Playback Speed Selection
-                    IconButton(onClick = onSpeedClick, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Speed,
-                            contentDescription = "السرعة",
-                            tint = PureTheme.colors.textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    // Picture-in-Picture
-                    IconButton(onClick = onPipClick, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.PictureInPictureAlt,
-                            contentDescription = "صورة داخل صورة",
-                            tint = PureTheme.colors.textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    // Zoom to Fill Toggle
-                    IconButton(onClick = onZoomToFillToggle, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.FitScreen,
-                            contentDescription = if (isZoomToFill) "ملاءمة الشاشة (16:9)" else "ملء الشاشة",
-                            tint = if (isZoomToFill) PureTheme.colors.primary else PureTheme.colors.textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    // Sleep Timer
-                    IconButton(onClick = onSleepTimerClick, modifier = Modifier.size(38.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Bedtime,
-                            contentDescription = "مؤقت النوم",
-                            tint = if (activeSleepTimer != SleepTimerOption.OFF) PureTheme.colors.secondary else PureTheme.colors.textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
+                    OverlayIconButton(
+                        icon = Icons.Default.Headphones,
+                        contentDescription = "صوتي فقط",
+                        tint = if (isAudioOnly) PureTheme.colors.primary else PureTheme.colors.textSecondary,
+                        onClick = onAudioOnlyToggle
+                    )
+                    OverlayIconButton(
+                        icon = Icons.Default.HighQuality,
+                        contentDescription = "الجودة",
+                        onClick = onQualityClick
+                    )
+                    OverlayIconButton(
+                        icon = Icons.Default.Speed,
+                        contentDescription = "السرعة",
+                        onClick = onSpeedClick
+                    )
+                    OverlayIconButton(
+                        icon = Icons.Default.PictureInPictureAlt,
+                        contentDescription = "صورة داخل صورة",
+                        onClick = onPipClick
+                    )
+                    OverlayIconButton(
+                        icon = Icons.Default.FitScreen,
+                        contentDescription = if (isZoomToFill) "ملاءمة الشاشة (16:9)" else "ملء الشاشة",
+                        tint = if (isZoomToFill) PureTheme.colors.primary else PureTheme.colors.textSecondary,
+                        onClick = onZoomToFillToggle
+                    )
+                    OverlayIconButton(
+                        icon = Icons.Default.Bedtime,
+                        contentDescription = "مؤقت النوم",
+                        tint = if (activeSleepTimer != SleepTimerOption.OFF) PureTheme.colors.secondary else PureTheme.colors.textSecondary,
+                        onClick = onSleepTimerClick
+                    )
                 }
             }
 
@@ -231,57 +235,39 @@ fun PlayerControlsOverlay(
                 }
             }
 
-            // 3. Bottom: Scrubber Slider and Time Labels
-            Column(
+            // 3. Bottom: Scrubber Slider, Time Labels & Fullscreen Toggle
+            PlayerTimelineBar(
+                currentPositionMs = currentPositionMs,
+                durationMs = durationMs,
+                isFullscreen = isFullscreen,
                 modifier = Modifier
-                    .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 8.dp)
-            ) {
-                Slider(
-                    value = sliderPosition,
-                    onValueChange = { draggingPositionMs = it },
-                    onValueChangeFinished = {
-                        draggingPositionMs?.let { onSeekTo(it.toLong()) }
-                        draggingPositionMs = null
-                    },
-                    valueRange = 0f..durationFloat,
-                    colors = SliderDefaults.colors(
-                        thumbColor = PureTheme.colors.primary,
-                        activeTrackColor = PureTheme.colors.primary,
-                        inactiveTrackColor = PureTheme.colors.borderOutline
-                    )
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = formatTime(displayPositionMs),
-                        style = PureTheme.typography.labelSmall.copy(fontSize = 12.sp),
-                        color = PureTheme.colors.textPrimary
-                    )
-                    Text(
-                        text = formatTime(durationMs),
-                        style = PureTheme.typography.labelSmall.copy(fontSize = 12.sp),
-                        color = PureTheme.colors.textSecondary
-                    )
-                }
-            }
+                    .padding(
+                        start = if (isFullscreen) 12.dp else 4.dp,
+                        end = if (isFullscreen) 12.dp else 4.dp,
+                        bottom = if (isFullscreen) 6.dp else 0.dp
+                    ),
+                onSeekTo = onSeekTo,
+                onScrubbingChange = onScrubbingChange,
+                onFullscreenToggle = onFullscreenToggle
+            )
         }
     }
 }
 
-private fun formatTime(millis: Long): String {
-    val totalSeconds = (millis / 1000).coerceAtLeast(0)
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-
-    return if (hours > 0) {
-        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format(Locale.US, "%02d:%02d", minutes, seconds)
+@Composable
+private fun OverlayIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color = PureTheme.colors.textSecondary,
+    onClick: () -> Unit
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(38.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(22.dp)
+        )
     }
 }
