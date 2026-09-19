@@ -6,7 +6,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -30,7 +32,8 @@ import com.dr.tech.puretube.features.watchlater.WatchLaterScreen
 fun MainNavigationShell(
     modifier: Modifier = Modifier,
     onVideoClick: (String) -> Unit = {},
-    onChannelClick: (String) -> Unit = {}
+    onChannelClick: (String) -> Unit = {},
+    miniPlayerContent: @Composable () -> Unit = {}
 ) {
     var currentTab by rememberSaveable { mutableStateOf(PureNavTab.FEED) }
 
@@ -39,10 +42,15 @@ fun MainNavigationShell(
             .fillMaxSize()
             .background(PureTheme.colors.background),
         bottomBar = {
-            PureBottomNavBar(
-                currentTab = currentTab,
-                onTabSelected = { currentTab = it }
-            )
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                miniPlayerContent()
+                PureBottomNavBar(
+                    currentTab = currentTab,
+                    onTabSelected = { currentTab = it }
+                )
+            }
         }
     ) { innerPadding ->
         Box(

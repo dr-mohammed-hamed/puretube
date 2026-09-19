@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -52,6 +53,7 @@ fun ChannelScreen(
     onBackClick: () -> Unit,
     onVideoClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    miniPlayerContent: @Composable () -> Unit = {},
     viewModel: ChannelViewModel = koinViewModel()
 ) {
     BackHandler(onBack = onBackClick)
@@ -76,6 +78,11 @@ fun ChannelScreen(
         modifier = modifier
             .fillMaxSize()
             .background(PureTheme.colors.background),
+        bottomBar = {
+            Box(modifier = Modifier.navigationBarsPadding()) {
+                miniPlayerContent()
+            }
+        },
         topBar = {
             Row(
                 modifier = Modifier

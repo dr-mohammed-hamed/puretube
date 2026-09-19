@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -48,6 +49,7 @@ fun PureVideoCard(
     onClick: () -> Unit,
     onBookmarkClick: () -> Unit,
     isBookmarked: Boolean = false,
+    watchedProgress: Float = 0f,
     onChannelClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -82,7 +84,7 @@ fun PureVideoCard(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(8.dp)
+                            .padding(bottom = if (watchedProgress > 0f) 10.dp else 8.dp, end = 8.dp)
                             .background(
                                 color = PureTheme.colors.background.copy(alpha = 0.85f),
                                 shape = RoundedCornerShape(6.dp)
@@ -93,6 +95,23 @@ fun PureVideoCard(
                             text = formatDuration(video.durationMs),
                             color = PureTheme.colors.textPrimary,
                             style = PureTheme.typography.labelSmall
+                        )
+                    }
+                }
+
+                if (watchedProgress > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .align(Alignment.BottomStart)
+                            .background(PureTheme.colors.surfaceElevated.copy(alpha = 0.6f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(watchedProgress.coerceIn(0f, 1f))
+                                .background(PureTheme.colors.primary)
                         )
                     }
                 }

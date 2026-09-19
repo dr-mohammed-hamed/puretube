@@ -27,10 +27,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
@@ -49,6 +46,7 @@ fun PlayerVideoSurface(
     player: Player,
     isAudioOnly: Boolean,
     modifier: Modifier = Modifier,
+    isZoomToFill: Boolean = false,
     onSingleTap: () -> Unit,
     onDoubleTapSeek: (Long) -> Unit
 ) {
@@ -56,7 +54,6 @@ fun PlayerVideoSurface(
     var isForwardSeek by remember { mutableStateOf(true) }
     val currentOnSingleTap by rememberUpdatedState(onSingleTap)
     val currentOnDoubleTapSeek by rememberUpdatedState(onDoubleTapSeek)
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
     LaunchedEffect(seekIndicatorText) {
         if (seekIndicatorText != null) {
@@ -68,15 +65,13 @@ fun PlayerVideoSurface(
     Box(
         modifier = modifier
             .background(PureTheme.colors.background)
-            .pointerInput(isRtl) {
+            .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { currentOnSingleTap() },
                     onDoubleTap = { offset ->
                         val isRightSide = offset.x > (size.width / 2)
-                        // Logical model: forward follows layout direction.
-                        // LTR: right = forward. RTL: left = forward (mirrored).
-                        val isForward = if (isRtl) !isRightSide else isRightSide
-                        if (isForward) {
+                        // Universal UX: Right side = forward (+10s), Left side = backward (-10s)
+                        if (isRightSide) {
                             isForwardSeek = true
                             seekIndicatorText = "+10"
                             currentOnDoubleTapSeek(10_000L)
@@ -90,11 +85,10 @@ fun PlayerVideoSurface(
             },
         contentAlignment = Alignment.Center
     ) {
-        val indicatorAlignment = if (isRtl) {
-            if (isForwardSeek) Alignment.CenterEnd else Alignment.CenterStart
-        } else {
-            if (isForwardSeek) Alignment.CenterEnd else Alignment.CenterStart
-        }
+        val indicatorAlignment = androidx.compose.ui.BiasAlignment(
+            horizontalBias = if (isForwardSeek) 0.65f else -0.65f,
+            verticalBias = 0f
+        )
 
         if (isAudioOnly) {
             // Audio-only mode surface placeholder
@@ -132,15 +126,31 @@ fun PlayerVideoSurface(
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
                         this.player = player
+                        this.resizeMode = if (isZoomToFill) {
+                            androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        } else {
+                            androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        }
                     }
                 },
                 update = { view ->
                     if (view.player != player) {
                         view.player = player
                     }
+                    val targetResize = if (isZoomToFill) {
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    } else {
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                    if (view.resizeMode != targetResize) {
+                        view.resizeMode = targetResize
+                    }
                 },
                 onRelease = { view ->
-                    view.player = null
+                    // Guard against clearing active player surface during PiP/configuration transitions
+                    if (!player.isPlaying) {
+                        view.player = null
+                    }
                 }
             )
         }
@@ -164,7 +174,7 @@ fun PlayerVideoSurface(
                             imageVector = if (isForwardSeek) Icons.Default.FastForward else Icons.Default.FastRewind,
                             contentDescription = if (isForwardSeek) "تقديم 10 ثوان" else "تأخير 10 ثوان",
                             tint = PureTheme.colors.primary,
-                            modifier = Modifier.size(32.dp).graphicsLayer(scaleX = if (isRtl) -1f else 1f)
+                            modifier = Modifier.size(32.dp)
                         )
                         Text(
                             text = text,

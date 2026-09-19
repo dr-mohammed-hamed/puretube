@@ -32,6 +32,7 @@ import com.dr.tech.puretube.features.player.components.PlayerVideoSurface
 import com.dr.tech.puretube.features.player.components.VideoMetadataSection
 import com.dr.tech.puretube.features.player.sheets.PlaybackSpeedSheet
 import com.dr.tech.puretube.features.player.sheets.QualitySelectionSheet
+import com.dr.tech.puretube.features.player.sheets.SleepTimerSheet
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -55,6 +56,7 @@ fun PlayerScreen(
     var areControlsVisible by remember { mutableStateOf(true) }
     var isSpeedSheetOpen by remember { mutableStateOf(false) }
     var isQualitySheetOpen by remember { mutableStateOf(false) }
+    var isSleepTimerSheetOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val toggleErrorText = stringResource(R.string.player_toggle_error)
     val extractErrorText = stringResource(R.string.player_error_extract)
@@ -118,6 +120,7 @@ fun PlayerScreen(
                 PlayerVideoSurface(
                     player = viewModel.playerManager.player,
                     isAudioOnly = uiState.isAudioOnly,
+                    isZoomToFill = uiState.isZoomToFill,
                     modifier = Modifier.fillMaxSize(),
                     onSingleTap = { areControlsVisible = !areControlsVisible },
                     onDoubleTapSeek = { offsetMs -> viewModel.seekRelative(offsetMs) }
@@ -132,12 +135,16 @@ fun PlayerScreen(
                     durationMs = uiState.durationMs,
                     currentQuality = uiState.currentQuality,
                     playbackSpeed = uiState.playbackSpeed,
+                    isZoomToFill = uiState.isZoomToFill,
+                    activeSleepTimer = uiState.activeSleepTimer,
                     onPlayPauseClick = { viewModel.togglePlayPause() },
                     onSeekTo = { posMs -> viewModel.seekTo(posMs) },
                     onSeekRelative = { offsetMs -> viewModel.seekRelative(offsetMs) },
                     onAudioOnlyToggle = { viewModel.setAudioOnly(!uiState.isAudioOnly) },
                     onSpeedClick = { isSpeedSheetOpen = true },
                     onQualityClick = { isQualitySheetOpen = true },
+                    onSleepTimerClick = { isSleepTimerSheetOpen = true },
+                    onZoomToFillToggle = { viewModel.toggleZoomToFill() },
                     onPipClick = onEnterPip,
                     onBackClick = {
                         viewModel.persistCurrentPlaybackPosition()
@@ -174,8 +181,12 @@ fun PlayerScreen(
                                     details = details,
                                     isSubscribed = uiState.isSubscribed,
                                     isSavedToWatchLater = uiState.isSavedToWatchLater,
+                                    isAudioOnly = uiState.isAudioOnly,
                                     onSubscribeToggle = { viewModel.toggleSubscription() },
                                     onWatchLaterToggle = { viewModel.toggleWatchLater() },
+                                    onAudioOnlyToggle = { viewModel.setAudioOnly(!uiState.isAudioOnly) },
+                                    onSleepTimerClick = { isSleepTimerSheetOpen = true },
+                                    onSeekTo = { posMs -> viewModel.seekTo(posMs) },
                                     onChannelClick = { onChannelClick(details.channelId) }
                                 )
                             }
@@ -210,6 +221,14 @@ fun PlayerScreen(
             currentQuality = uiState.currentQuality,
             onDismiss = { isQualitySheetOpen = false },
             onQualitySelected = { viewModel.setQuality(it) }
+        )
+    }
+
+    if (isSleepTimerSheetOpen) {
+        SleepTimerSheet(
+            activeOption = uiState.activeSleepTimer,
+            onDismiss = { isSleepTimerSheetOpen = false },
+            onOptionSelected = { viewModel.setSleepTimer(it) }
         )
     }
 }

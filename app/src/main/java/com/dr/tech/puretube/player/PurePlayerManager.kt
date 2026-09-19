@@ -8,7 +8,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.common.util.Util
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import com.dr.tech.puretube.core.aibridge.AudioFilterHook
@@ -18,6 +17,8 @@ import com.dr.tech.puretube.core.aibridge.VideoFrameHook
 import com.dr.tech.puretube.core.data.model.ExtractedVideoDetails
 import com.dr.tech.puretube.core.data.model.PlaybackQuality
 import com.dr.tech.puretube.core.data.repository.VideoDetailsRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,7 +46,11 @@ class PurePlayerManager(
     private val videoDetailsRepository: VideoDetailsRepository,
     private val videoFrameHook: VideoFrameHook = NoOpVideoFrameHook(),
     private val audioFilterHook: AudioFilterHook = NoOpAudioFilterHook(),
-    private val coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val coroutineScope: CoroutineScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, throwable ->
+            android.util.Log.e("PurePlayerManager", "Uncaught player coroutine error intercepted", throwable)
+        }
+    )
 ) {
 
     val player: ExoPlayer = buildExoPlayer()
@@ -74,7 +79,9 @@ class PurePlayerManager(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private var currentVideoDetails: ExtractedVideoDetails? = null
+    private val _currentVideoDetails = MutableStateFlow<ExtractedVideoDetails?>(null)
+    val currentVideoDetails: StateFlow<ExtractedVideoDetails?> = _currentVideoDetails.asStateFlow()
+
     private var positionTrackerJob: Job? = null
     private var isRecoveringFrom403 = false
     private var forbiddenRetryCount = 0
@@ -145,27 +152,32 @@ class PurePlayerManager(
      * Loads and starts playback for the specified video details at the given starting position.
      */
     fun loadVideo(details: ExtractedVideoDetails, startPositionMs: Long = 0L) {
-        if (currentVideoDetails?.videoId != details.videoId) {
+        if (_currentVideoDetails.value?.videoId != details.videoId) {
             forbiddenRetryCount = 0
         }
-        currentVideoDetails = details
+        _currentVideoDetails.value = details
         _errorMessage.value = null
-        val mediaSource = mediaSourceFactory.createMediaSource(
-            details = details,
-            quality = _currentQuality.value,
-            isAudioOnly = _isAudioOnly.value
-        )
+        try {
+            val mediaSource = mediaSourceFactory.createMediaSource(
+                details = details,
+                quality = _currentQuality.value,
+                isAudioOnly = _isAudioOnly.value
+            )
 
-        if (mediaSource != null) {
-            player.setMediaSource(mediaSource)
-            player.prepare()
-            if (startPositionMs > 0L) {
-                player.seekTo(startPositionMs)
+            if (mediaSource != null) {
+                player.setMediaSource(mediaSource)
+                player.prepare()
+                if (startPositionMs > 0L) {
+                    player.seekTo(startPositionMs)
+                }
+                player.playWhenReady = true
+                startPlaybackService()
+            } else {
+                _errorMessage.value = "تعذر تحضير روابط البث المباشر"
             }
-            player.playWhenReady = true
-            startPlaybackService()
-        } else {
-            _errorMessage.value = "تعذر تحضير روابط البث المباشر"
+        } catch (e: Throwable) {
+            android.util.Log.e("PurePlayerManager", "Failed to load video media source", e)
+            _errorMessage.value = "تعذر إعداد مسار تشغيل الفيديو"
         }
     }
 
@@ -178,13 +190,29 @@ class PurePlayerManager(
         player.pause()
     }
 
+    fun stop() {
+        player.stop()
+        player.clearMediaItems()
+        _currentVideoDetails.value = null
+        _isPlaying.value = false
+        _isBuffering.value = false
+        _currentPositionMs.value = 0L
+        _durationMs.value = 0L
+        try {
+            val intent = android.content.Intent(context, PurePlaybackService::class.java)
+            context.stopService(intent)
+        } catch (e: Exception) {
+            android.util.Log.w("PurePlayerManager", "Could not stop playback service", e)
+        }
+    }
+
     private fun startPlaybackService() {
         try {
             val intent = android.content.Intent(context, PurePlaybackService::class.java)
-            Util.startForegroundService(context, intent)
+            context.startService(intent)
         } catch (e: Exception) {
             // Guard against background start restrictions with diagnostic logging
-            android.util.Log.w("PurePlayerManager", "Could not start foreground playback service", e)
+            android.util.Log.w("PurePlayerManager", "Could not start playback service", e)
         }
     }
 
@@ -210,7 +238,7 @@ class PurePlayerManager(
         if (_currentQuality.value == quality) return
         _currentQuality.value = quality
 
-        val details = currentVideoDetails ?: return
+        val details = _currentVideoDetails.value ?: return
         val currentPos = player.currentPosition
         val wasPlaying = player.isPlaying
 
@@ -230,7 +258,7 @@ class PurePlayerManager(
         if (_isAudioOnly.value == enabled) return
         _isAudioOnly.value = enabled
 
-        val details = currentVideoDetails ?: return
+        val details = _currentVideoDetails.value ?: return
         val currentPos = player.currentPosition
         val wasPlaying = player.isPlaying
 
@@ -255,7 +283,7 @@ class PurePlayerManager(
         val isHttpForbidden = (cause is HttpDataSource.InvalidResponseCodeException &&
                 (cause.responseCode == 403 || cause.responseCode == 410))
 
-        val details = currentVideoDetails
+        val details = _currentVideoDetails.value
         if (isHttpForbidden && details != null && !isRecoveringFrom403) {
             if (forbiddenRetryCount >= maxForbiddenRetries) {
                 forbiddenRetryCount = 0
@@ -270,18 +298,27 @@ class PurePlayerManager(
                 try {
                     val refreshResult = videoDetailsRepository.extractVideoDetails(details.videoId)
                     refreshResult.onSuccess { freshDetails ->
-                        currentVideoDetails = freshDetails
-                        loadVideo(freshDetails, savedPositionMs)
+                        if (_currentVideoDetails.value != null) {
+                            _currentVideoDetails.value = freshDetails
+                            loadVideo(freshDetails, savedPositionMs)
+                        }
                     }.onFailure {
                         forbiddenRetryCount = 0
                         _errorMessage.value = "انتهت صلاحية الرابط وتعذر تجديده تلقائياً"
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    android.util.Log.w("PurePlayerManager", "HTTP 403 recovery attempt failed", e)
+                    forbiddenRetryCount = 0
+                    _errorMessage.value = "انتهت صلاحية الرابط وتعذر تجديده تلقائياً"
                 } finally {
                     isRecoveringFrom403 = false
                 }
             }
         } else {
-            _errorMessage.value = "حدث خطأ أثناء تشغيل الفيديو (${error.errorCodeName})"
+            android.util.Log.e("PurePlayerManager", "Playback error encountered: ${error.errorCodeName}", error)
+            _errorMessage.value = "حدث خطأ أثناء تشغيل الفيديو، يرجى المحاولة لاحقاً"
         }
     }
 
@@ -291,5 +328,11 @@ class PurePlayerManager(
         // break later launches); cancel children only.
         coroutineScope.coroutineContext.cancelChildren()
         player.release()
+        try {
+            val intent = android.content.Intent(context, PurePlaybackService::class.java)
+            context.stopService(intent)
+        } catch (e: Exception) {
+            android.util.Log.w("PurePlayerManager", "Could not stop playback service on release", e)
+        }
     }
 }

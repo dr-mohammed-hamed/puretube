@@ -13,13 +13,17 @@ import com.dr.tech.puretube.core.database.entity.HistoryEntity
 import com.dr.tech.puretube.core.database.entity.SubscriptionEntity
 import com.dr.tech.puretube.core.database.entity.WatchLaterEntity
 import com.dr.tech.puretube.player.PurePlayerManager
+import com.dr.tech.puretube.features.player.sheets.SleepTimerOption
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -38,7 +42,9 @@ data class PlayerUiState(
     val isSavedToWatchLater: Boolean = false,
     val relatedVideos: List<FeedVideoItem> = emptyList(),
     val errorMessage: String? = null,
-    val toggleErrorMessage: String? = null
+    val toggleErrorMessage: String? = null,
+    val isZoomToFill: Boolean = false,
+    val activeSleepTimer: SleepTimerOption = SleepTimerOption.OFF
 )
 
 /**
@@ -62,6 +68,15 @@ class PlayerViewModel(
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     private var currentVideoId: String? = null
+    private val coroutineExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        android.util.Log.e("PlayerViewModel", "Uncaught player coroutine exception intercepted", throwable)
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                errorMessage = "حدث خطأ غير متوقع أثناء تشغيل المقطع"
+            )
+        }
+    }
     private val syncHelper = PlayerPlaybackSyncHelper(historyRepository) { e ->
         android.util.Log.w("PlayerViewModel", "history sync failed", e)
     }
@@ -69,6 +84,7 @@ class PlayerViewModel(
     private var subObserveJob: Job? = null
     private var watchLaterObserveJob: Job? = null
     private var channelVideosJob: Job? = null
+    private var sleepTimerJob: Job? = null
     private val collectorJobs = CopyOnWriteArrayList<Job>()
     private val togglingSubs = ConcurrentHashMap.newKeySet<String>()
     private val togglingWatch = ConcurrentHashMap.newKeySet<String>()
@@ -78,7 +94,7 @@ class PlayerViewModel(
     }
 
     private fun <T> trackCollect(flow: Flow<T>, update: (PlayerUiState, T) -> PlayerUiState) {
-        collectorJobs += viewModelScope.launch { flow.collect { v -> _uiState.update { update(it, v) } } }
+        collectorJobs += viewModelScope.launch(coroutineExceptionHandler) { flow.collect { v -> _uiState.update { update(it, v) } } }
     }
 
     private fun observePlayerManagerState() {
@@ -93,9 +109,45 @@ class PlayerViewModel(
     }
 
     fun loadVideo(videoId: String, force: Boolean = false) {
-        if (!force && currentVideoId == videoId && _uiState.value.videoDetails != null) {
+        val managerDetails = playerManager.currentVideoDetails.value
+        if (!force && managerDetails?.videoId == videoId) {
+            val outgoingId = currentVideoId
+            val outgoingPos = _uiState.value.currentPositionMs
+            if (outgoingId != null && outgoingId != videoId && outgoingPos > 0L) {
+                syncHelper.persistAsync(viewModelScope, outgoingId, outgoingPos)
+            }
+            currentVideoId = videoId
+            loadVideoJob?.cancel()
+            subObserveJob?.cancel()
+            watchLaterObserveJob?.cancel()
+            channelVideosJob?.cancel()
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    videoDetails = managerDetails,
+                    durationMs = managerDetails.durationMs,
+                    errorMessage = null
+                )
+            }
+            if (managerDetails.channelId.isNotBlank()) {
+                observeChannelAndBookmarkState(managerDetails.channelId, videoId)
+                loadChannelVideos(managerDetails.channelId)
+            }
             if (!syncHelper.isSyncing) startHistorySync()
             return
+        }
+
+        val existingDetails = _uiState.value.videoDetails
+        if (!force && currentVideoId == videoId && existingDetails != null) {
+            if (playerManager.currentVideoDetails.value?.videoId == videoId) {
+                if (!syncHelper.isSyncing) startHistorySync()
+                return
+            } else {
+                val savedPosition = _uiState.value.currentPositionMs
+                playerManager.loadVideo(existingDetails, startPositionMs = savedPosition)
+                startHistorySync()
+                return
+            }
         }
         // Persist outgoing video position before switching (in-app related-list
         // navigation reuses the ViewModel without disposing the screen).
@@ -122,7 +174,11 @@ class PlayerViewModel(
         subObserveJob?.cancel()
         watchLaterObserveJob?.cancel()
         channelVideosJob?.cancel()
-        loadVideoJob = viewModelScope.launch {
+        if (_uiState.value.activeSleepTimer == SleepTimerOption.END_OF_VIDEO) {
+            sleepTimerJob?.cancel()
+            _uiState.update { it.copy(activeSleepTimer = SleepTimerOption.OFF) }
+        }
+        loadVideoJob = viewModelScope.launch(coroutineExceptionHandler) {
             val requestId = videoId
             val savedPosition = try {
                 historyRepository.getPlaybackPosition(videoId) ?: 0L
@@ -187,13 +243,13 @@ class PlayerViewModel(
         subObserveJob?.cancel()
         watchLaterObserveJob?.cancel()
         val requestVideoId = currentVideoId
-        subObserveJob = viewModelScope.launch {
+        subObserveJob = viewModelScope.launch(coroutineExceptionHandler) {
             subscriptionRepository.isSubscribed(channelId).collect { sub ->
                 if (requestVideoId != currentVideoId) return@collect
                 _uiState.update { it.copy(isSubscribed = sub) }
             }
         }
-        watchLaterObserveJob = viewModelScope.launch {
+        watchLaterObserveJob = viewModelScope.launch(coroutineExceptionHandler) {
             watchLaterRepository.isInWatchLater(videoId).collect { saved ->
                 if (requestVideoId != currentVideoId) return@collect
                 _uiState.update { it.copy(isSavedToWatchLater = saved) }
@@ -204,7 +260,7 @@ class PlayerViewModel(
     private fun loadChannelVideos(channelId: String) {
         channelVideosJob?.cancel()
         val requestedVideoId = currentVideoId
-        channelVideosJob = viewModelScope.launch {
+        channelVideosJob = viewModelScope.launch(coroutineExceptionHandler) {
             videoDetailsRepository.getChannelVideos(channelId, limit = 15)
                 .onSuccess { list ->
                     if (requestedVideoId != currentVideoId) return@onSuccess
@@ -237,10 +293,40 @@ class PlayerViewModel(
     fun setQuality(quality: PlaybackQuality) = playerManager.setQuality(quality)
     fun setAudioOnly(enabled: Boolean) = playerManager.setAudioOnly(enabled)
 
+    fun toggleZoomToFill() {
+        _uiState.update { it.copy(isZoomToFill = !it.isZoomToFill) }
+    }
+
+    fun setSleepTimer(option: SleepTimerOption) {
+        sleepTimerJob?.cancel()
+        _uiState.update { it.copy(activeSleepTimer = option) }
+        if (option == SleepTimerOption.OFF) return
+
+        sleepTimerJob = viewModelScope.launch(coroutineExceptionHandler) {
+            val durationMins = option.durationMinutes
+            if (durationMins != null && durationMins > 0) {
+                delay(durationMins * 60 * 1000L)
+                pause()
+                _uiState.update { it.copy(activeSleepTimer = SleepTimerOption.OFF) }
+            } else if (option == SleepTimerOption.END_OF_VIDEO) {
+                while (isActive) {
+                    val pos = _uiState.value.currentPositionMs
+                    val dur = _uiState.value.durationMs
+                    if (dur > 0L && pos >= dur - 1500L) {
+                        pause()
+                        _uiState.update { it.copy(activeSleepTimer = SleepTimerOption.OFF) }
+                        break
+                    }
+                    delay(1000L)
+                }
+            }
+        }
+    }
+
     fun toggleSubscription() {
         val details = _uiState.value.videoDetails ?: return
         if (!togglingSubs.add(details.channelId)) return
-        viewModelScope.launch {
+        viewModelScope.launch(coroutineExceptionHandler) {
             try {
                 subscriptionRepository.toggleSubscription(
                     SubscriptionEntity(
@@ -266,7 +352,7 @@ class PlayerViewModel(
     fun toggleWatchLater() {
         val details = _uiState.value.videoDetails ?: return
         if (!togglingWatch.add(details.videoId)) return
-        viewModelScope.launch {
+        viewModelScope.launch(coroutineExceptionHandler) {
             try {
                 watchLaterRepository.toggleWatchLater(
                     WatchLaterEntity(
@@ -312,6 +398,7 @@ class PlayerViewModel(
         subObserveJob?.cancel()
         watchLaterObserveJob?.cancel()
         channelVideosJob?.cancel()
+        sleepTimerJob?.cancel()
         collectorJobs.forEach { it.cancel() }
         collectorJobs.clear()
     }

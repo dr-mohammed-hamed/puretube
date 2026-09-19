@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.HighQuality
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Speed
+import com.dr.tech.puretube.features.player.sheets.SleepTimerOption
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +61,8 @@ fun PlayerControlsOverlay(
     durationMs: Long,
     currentQuality: PlaybackQuality,
     playbackSpeed: Float,
+    isZoomToFill: Boolean = false,
+    activeSleepTimer: SleepTimerOption = SleepTimerOption.OFF,
     modifier: Modifier = Modifier,
     onPlayPauseClick: () -> Unit,
     onSeekTo: (Long) -> Unit,
@@ -65,6 +70,8 @@ fun PlayerControlsOverlay(
     onAudioOnlyToggle: () -> Unit,
     onSpeedClick: () -> Unit,
     onQualityClick: () -> Unit,
+    onSleepTimerClick: () -> Unit = {},
+    onZoomToFillToggle: () -> Unit = {},
     onPipClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
@@ -93,48 +100,74 @@ fun PlayerControlsOverlay(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBackClick) {
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.size(38.dp)
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "الرجوع",
-                        tint = PureTheme.colors.textPrimary
+                        tint = PureTheme.colors.textPrimary,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     // Audio-Only Toggle
-                    IconButton(onClick = onAudioOnlyToggle) {
+                    IconButton(onClick = onAudioOnlyToggle, modifier = Modifier.size(38.dp)) {
                         Icon(
                             imageVector = Icons.Default.Headphones,
                             contentDescription = "صوتي فقط",
-                            tint = if (isAudioOnly) PureTheme.colors.primary else PureTheme.colors.textSecondary
+                            tint = if (isAudioOnly) PureTheme.colors.primary else PureTheme.colors.textSecondary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-
                     // Quality Selection
-                    IconButton(onClick = onQualityClick) {
+                    IconButton(onClick = onQualityClick, modifier = Modifier.size(38.dp)) {
                         Icon(
                             imageVector = Icons.Default.HighQuality,
                             contentDescription = "الجودة",
-                            tint = PureTheme.colors.textSecondary
+                            tint = PureTheme.colors.textSecondary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-
                     // Playback Speed Selection
-                    IconButton(onClick = onSpeedClick) {
+                    IconButton(onClick = onSpeedClick, modifier = Modifier.size(38.dp)) {
                         Icon(
                             imageVector = Icons.Default.Speed,
                             contentDescription = "السرعة",
-                            tint = PureTheme.colors.textSecondary
+                            tint = PureTheme.colors.textSecondary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-
                     // Picture-in-Picture
-                    IconButton(onClick = onPipClick) {
+                    IconButton(onClick = onPipClick, modifier = Modifier.size(38.dp)) {
                         Icon(
                             imageVector = Icons.Default.PictureInPictureAlt,
                             contentDescription = "صورة داخل صورة",
-                            tint = PureTheme.colors.textSecondary
+                            tint = PureTheme.colors.textSecondary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    // Zoom to Fill Toggle
+                    IconButton(onClick = onZoomToFillToggle, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.FitScreen,
+                            contentDescription = if (isZoomToFill) "ملاءمة الشاشة (16:9)" else "ملء الشاشة",
+                            tint = if (isZoomToFill) PureTheme.colors.primary else PureTheme.colors.textSecondary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    // Sleep Timer
+                    IconButton(onClick = onSleepTimerClick, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Bedtime,
+                            contentDescription = "مؤقت النوم",
+                            tint = if (activeSleepTimer != SleepTimerOption.OFF) PureTheme.colors.secondary else PureTheme.colors.textSecondary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }

@@ -15,17 +15,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,11 +33,13 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.dr.tech.puretube.core.data.model.ExtractedVideoDetails
 import com.dr.tech.puretube.core.designsystem.theme.PureTheme
+import com.dr.tech.puretube.features.player.util.TimestampParser
 import java.util.Locale
 
 /**
- * Metadata section beneath the player displaying video title, channel row, and action toggles.
- * Conforms to Constitution Principles I, V, VI, VII:
+ * Metadata section beneath the player displaying video title, channel row, quick actions,
+ * interactive chapters/timestamps, and collapsible description.
+ * Conforms to Constitution Principles I, V, VI (< 220 LOC), VII:
  * Zero emojis, PureTheme semantic colors, Cairo typography.
  */
 @Composable
@@ -47,11 +47,19 @@ fun VideoMetadataSection(
     details: ExtractedVideoDetails,
     isSubscribed: Boolean,
     isSavedToWatchLater: Boolean,
+    isAudioOnly: Boolean = false,
     modifier: Modifier = Modifier,
     onSubscribeToggle: () -> Unit,
     onWatchLaterToggle: () -> Unit,
+    onAudioOnlyToggle: () -> Unit = {},
+    onSleepTimerClick: () -> Unit = {},
+    onSeekTo: (Long) -> Unit = {},
     onChannelClick: () -> Unit = {}
 ) {
+    val chapters = remember(details.description, details.durationMs) {
+        TimestampParser.extractChapters(details.description, details.durationMs)
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -188,22 +196,24 @@ fun VideoMetadataSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // 4. Action Row (Watch Later Save)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onWatchLaterToggle) {
-                Icon(
-                    imageVector = if (isSavedToWatchLater) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    contentDescription = "المشاهدة لاحقاً",
-                    tint = if (isSavedToWatchLater) PureTheme.colors.secondary else PureTheme.colors.textSecondary
-                )
-            }
-        }
+        // 4. Quick Action Row
+        VideoActionButtonsRow(
+            videoId = details.videoId,
+            title = details.title,
+            isSavedToWatchLater = isSavedToWatchLater,
+            isAudioOnly = isAudioOnly,
+            onWatchLaterToggle = onWatchLaterToggle,
+            onAudioOnlyToggle = onAudioOnlyToggle,
+            onSleepTimerClick = onSleepTimerClick
+        )
+
+        // 5. Chapters Row
+        VideoChaptersRow(chapters = chapters, onSeekTo = onSeekTo)
+
+        // 6. Collapsible Description Card
+        VideoDescriptionCard(description = details.description)
     }
 }
 

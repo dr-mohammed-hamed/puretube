@@ -6,4 +6,5 @@
     <string name="player_error_generic">حدث خطأ غير متوقع</string>
     <string name="player_error_extract">تعذر استخراج بيانات الفيديو</string>
     <string name="player_toggle_error">تعذر حفظ التغيير، حاول مجدداً</string>
+    <string name="playback_notification_channel_name">تشغيل الصوت في الخلفية</string>
 </resources>

@@ -58,7 +58,12 @@ class PureMediaSourceFactory(
         if (selectedVideo != null && selectedVideo.isVideoOnly && selectedAudio != null) {
             val videoSource = createSingleSource(selectedVideo.url, details)
             val audioSource = createSingleSource(selectedAudio.url, details)
-            return MergingMediaSource(videoSource, audioSource)
+            return MergingMediaSource(
+                /* adjustPeriodTimeOffsets = */ true,
+                /* clipDurations = */ true,
+                videoSource,
+                audioSource
+            )
         }
 
         // Case 3: Single progressive combined stream.
