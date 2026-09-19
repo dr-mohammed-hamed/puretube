@@ -1,15 +1,22 @@
 package com.dr.tech.puretube.player
 
 import android.content.Context
+import android.media.MediaCodec
+import android.os.Build
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecDecoderException
+import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
+import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import com.dr.tech.puretube.core.aibridge.AudioFilterHook
 import com.dr.tech.puretube.core.aibridge.NoOpAudioFilterHook
 import com.dr.tech.puretube.core.aibridge.NoOpVideoFrameHook
@@ -87,6 +94,10 @@ class PurePlayerManager(
     private var forbiddenRetryCount = 0
     private val maxForbiddenRetries = 1
 
+    private var isRecoveringFromDecodingError = false
+    private var decodingRetryCount = 0
+    private val maxDecodingRetries = 1
+
     init {
         setupPlayerListener()
         startPositionTracker()
@@ -98,7 +109,25 @@ class PurePlayerManager(
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
-        return ExoPlayer.Builder(context)
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+            .setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+                val decoders = MediaCodecUtil.getDecoderInfos(
+                    mimeType,
+                    requiresSecureDecoder,
+                    requiresTunnelingDecoder
+                )
+                // Filter out broken c2.android.opus.decoder on Android 10 (API 29) where ION ioctl fails
+                if (Build.VERSION.SDK_INT == 29 &&
+                    mimeType.equals(MimeTypes.AUDIO_OPUS, ignoreCase = true)
+                ) {
+                    decoders.filter { !it.name.equals("c2.android.opus.decoder", ignoreCase = true) }
+                } else {
+                    decoders
+                }
+            }
+
+        return ExoPlayer.Builder(context, renderersFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .build()
@@ -112,6 +141,7 @@ class PurePlayerManager(
                     _durationMs.value = player.duration.coerceAtLeast(0L)
                     _errorMessage.value = null
                     forbiddenRetryCount = 0
+                    decodingRetryCount = 0
                 }
             }
 
@@ -154,6 +184,9 @@ class PurePlayerManager(
     fun loadVideo(details: ExtractedVideoDetails, startPositionMs: Long = 0L) {
         if (_currentVideoDetails.value?.videoId != details.videoId) {
             forbiddenRetryCount = 0
+            decodingRetryCount = 0
+            isRecoveringFrom403 = false
+            isRecoveringFromDecodingError = false
         }
         _currentVideoDetails.value = details
         _errorMessage.value = null
@@ -275,13 +308,22 @@ class PurePlayerManager(
     }
 
     /**
-     * Automatic in-memory recovery from expiring YouTube DASH URLs (HTTP 403 / 410).
-     * Follows Constitution Principle VIII.
+     * Automatic in-memory recovery from expiring YouTube DASH URLs (HTTP 403 / 410)
+     * and codec decoding failures (ERROR_CODE_DECODING_FAILED).
+     * Follows Constitution Principles IV, VII, and VIII.
      */
     private fun handlePlaybackError(error: PlaybackException) {
         val cause = error.cause
         val isHttpForbidden = (cause is HttpDataSource.InvalidResponseCodeException &&
                 (cause.responseCode == 403 || cause.responseCode == 410))
+
+        val isDecodingError = error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
+                error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+                error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ||
+                error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ||
+                cause is MediaCodecDecoderException ||
+                cause is MediaCodecRenderer.DecoderInitializationException ||
+                (cause is MediaCodec.CodecException)
 
         val details = _currentVideoDetails.value
         if (isHttpForbidden && details != null && !isRecoveringFrom403) {
@@ -315,6 +357,47 @@ class PurePlayerManager(
                 } finally {
                     isRecoveringFrom403 = false
                 }
+            }
+        } else if (isDecodingError && details != null && !isRecoveringFromDecodingError) {
+            if (decodingRetryCount >= maxDecodingRetries) {
+                decodingRetryCount = 0
+                _errorMessage.value = "تعذر فك تشفير هذا المقطع على مشفرات الجهاز"
+                return
+            }
+            decodingRetryCount++
+            isRecoveringFromDecodingError = true
+            val savedPositionMs = player.currentPosition.coerceAtLeast(0L)
+            android.util.Log.w(
+                "PurePlayerManager",
+                "Decoding failure encountered (${error.errorCodeName}). Attempting self-healing fallback at ${savedPositionMs}ms",
+                error
+            )
+
+            try {
+                val fallbackMediaSource = mediaSourceFactory.createFallbackMediaSource(
+                    details = details,
+                    quality = _currentQuality.value,
+                    isAudioOnly = _isAudioOnly.value
+                )
+
+                if (fallbackMediaSource != null) {
+                    player.setMediaSource(fallbackMediaSource)
+                    player.prepare()
+                    if (savedPositionMs > 0L) {
+                        player.seekTo(savedPositionMs)
+                    }
+                    player.playWhenReady = true
+                    android.util.Log.i("PurePlayerManager", "Self-healing fallback media source successfully activated")
+                } else {
+                    decodingRetryCount = 0
+                    _errorMessage.value = "تعذر العثور على مسار بديل متوافق مع مشفر الجهاز"
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("PurePlayerManager", "Failed to activate fallback media source", t)
+                decodingRetryCount = 0
+                _errorMessage.value = "تعذر تشغيل الفيديو بمشفرات هذا الجهاز"
+            } finally {
+                isRecoveringFromDecodingError = false
             }
         } else {
             android.util.Log.e("PurePlayerManager", "Playback error encountered: ${error.errorCodeName}", error)

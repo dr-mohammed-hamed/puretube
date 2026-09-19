@@ -21,7 +21,27 @@ data class AudioStreamFormat(
     val bitrate: Int,
     val format: String,
     val averageBitrate: Int = bitrate
-)
+) {
+    /**
+     * Checks if this audio stream uses hardware-accelerated AAC/M4A encoding.
+     */
+    fun isAacOrM4a(): Boolean {
+        val fmt = format.lowercase()
+        val u = url.lowercase()
+        return fmt.contains("m4a") || fmt.contains("mp4") || fmt.contains("aac") ||
+                u.contains("mime=audio%2fmp4") || u.contains("mime=audio/mp4")
+    }
+
+    /**
+     * Checks if this audio stream uses Opus or WebM encoding.
+     */
+    fun isOpusOrWebm(): Boolean {
+        val fmt = format.lowercase()
+        val u = url.lowercase()
+        return fmt.contains("opus") || fmt.contains("webm") ||
+                u.contains("mime=audio%2fwebm") || u.contains("mime=audio/webm")
+    }
+}
 
 /**
  * Supported user-selectable playback resolutions.

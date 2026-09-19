@@ -3,6 +3,7 @@ package com.dr.tech.puretube.player
 import android.content.Context
 import android.net.Uri
 import androidx.annotation.OptIn
+import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
@@ -40,9 +41,10 @@ class PureMediaSourceFactory(
     fun createMediaSource(
         details: ExtractedVideoDetails,
         quality: PlaybackQuality = PlaybackQuality.AUTO,
-        isAudioOnly: Boolean = false
+        isAudioOnly: Boolean = false,
+        excludeOpus: Boolean = false
     ): MediaSource? {
-        val selectedAudio = selectBestAudioStream(details.audioStreams)
+        val selectedAudio = selectBestAudioStream(details.audioStreams, excludeOpus = excludeOpus)
 
         // Case 1: Audio-Only Mode
         if (isAudioOnly) {
@@ -80,11 +82,51 @@ class PureMediaSourceFactory(
         return createSingleSource(fallbackUrl, details)
     }
 
+    /**
+     * Creates a self-healing fallback MediaSource when playback fails due to a codec error
+     * (e.g. MediaCodec ERROR_CODE_DECODING_FAILED or ION ioctl crash on c2.android.opus.decoder).
+     *
+     * Strategies:
+     * 1. If in video mode, prioritize a progressive combined stream (<=720p standard H.264/AAC MP4)
+     *    to guarantee flawless hardware-accelerated playback without complex DASH video/audio demuxing.
+     * 2. If audio-only or no progressive stream exists, attempt DASH with Opus strictly excluded.
+     * 3. Fall back to progressive stream if available.
+     */
+    fun createFallbackMediaSource(
+        details: ExtractedVideoDetails,
+        quality: PlaybackQuality = PlaybackQuality.AUTO,
+        isAudioOnly: Boolean = false
+    ): MediaSource? {
+        // Strategy 1: In standard video mode, prioritize a single progressive combined stream (H.264/AAC)
+        val progressiveStream = details.videoStreams.firstOrNull { !it.isVideoOnly }
+        if (!isAudioOnly && progressiveStream != null) {
+            return createSingleSource(progressiveStream.url, details)
+        }
+
+        // Strategy 2: Attempt DASH or audio-only with Opus strictly excluded
+        val safeDashSource = createMediaSource(
+            details = details,
+            quality = quality,
+            isAudioOnly = isAudioOnly,
+            excludeOpus = true
+        )
+        if (safeDashSource != null) {
+            return safeDashSource
+        }
+
+        // Strategy 3: Progressive combined stream as a last resort if audio-only had no safe audio
+        if (progressiveStream != null) {
+            return createSingleSource(progressiveStream.url, details)
+        }
+
+        return null
+    }
+
     private fun createSingleSource(uriString: String, details: ExtractedVideoDetails): MediaSource {
         val mediaMetadata = MediaMetadata.Builder()
             .setTitle(details.title)
             .setArtist(details.channelName)
-            .setArtworkUri(details.channelAvatarUrl?.let { Uri.parse(it) })
+            .setArtworkUri(details.channelAvatarUrl?.toUri())
             .build()
 
         val mediaItem = MediaItem.Builder()
@@ -94,8 +136,33 @@ class PureMediaSourceFactory(
         return ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
     }
 
-    private fun selectBestAudioStream(audioStreams: List<AudioStreamFormat>): AudioStreamFormat? {
-        return audioStreams.maxByOrNull { it.bitrate }
+    /**
+     * Selects the optimal audio stream.
+     * Prioritizes hardware-accelerated M4A/AAC streams (e.g. 128kbps LC-AAC)
+     * over software-decoded Opus streams to eliminate codec crashes on devices
+     * with broken Codec2 implementations (such as Android 10 / API 29 c2.android.opus.decoder).
+     * Falls back to Opus or other available streams if no M4A stream is present.
+     */
+    fun selectBestAudioStream(
+        audioStreams: List<AudioStreamFormat>,
+        excludeOpus: Boolean = false
+    ): AudioStreamFormat? {
+        if (audioStreams.isEmpty()) return null
+
+        val candidateStreams = if (excludeOpus) {
+            audioStreams.filter { !it.isOpusOrWebm() }
+        } else {
+            audioStreams
+        }
+
+        // Priority 1: Hardware-accelerated M4A/AAC streams (highest bitrate first)
+        val bestAac = candidateStreams
+            .filter { it.isAacOrM4a() }
+            .maxByOrNull { it.bitrate }
+        if (bestAac != null) return bestAac
+
+        // Priority 2: Other formats (e.g. Opus / WebM) if no AAC stream is available
+        return candidateStreams.maxByOrNull { it.bitrate }
     }
 
     private fun selectVideoStream(
