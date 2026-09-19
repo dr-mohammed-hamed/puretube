@@ -133,8 +133,9 @@ private fun WatchLaterHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(PureTheme.colors.background)
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

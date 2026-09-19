@@ -7,6 +7,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -41,8 +42,9 @@ fun MainNavigationShell(
         modifier = modifier
             .fillMaxSize()
             .background(PureTheme.colors.background),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            androidx.compose.foundation.layout.Column(
+            Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 miniPlayerContent()
@@ -56,7 +58,7 @@ fun MainNavigationShell(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(bottom = innerPadding.calculateBottomPadding())
                 .background(PureTheme.colors.background)
         ) {
             AnimatedContent(

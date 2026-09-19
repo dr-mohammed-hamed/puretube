@@ -22,7 +22,6 @@ import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -70,20 +69,19 @@ fun FeedScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { innerPadding ->
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(innerPadding)
             .background(PureTheme.colors.background)
     ) {
-        // Mindful Top App Header
-        FeedHeader(
-            isRefreshing = state.isRefreshing,
-            onRefreshClick = { viewModel.refresh(force = true) }
-        )
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Mindful Top App Header
+            FeedHeader(
+                isRefreshing = state.isRefreshing,
+                onRefreshClick = { viewModel.refresh(force = true) }
+            )
 
         Box(
             modifier = Modifier
@@ -165,6 +163,13 @@ fun FeedScreen(
             }
         }
     }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+        )
     }
 }
 
@@ -176,8 +181,9 @@ private fun FeedHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(PureTheme.colors.background)
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
