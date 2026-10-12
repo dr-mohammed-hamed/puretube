@@ -181,7 +181,13 @@ class VideoDetailsRepositoryImpl(
                     channelName = streamItem.uploaderName ?: "",
                     thumbnailUrl = streamItem.thumbnails?.firstOrNull()?.url,
                     durationMs = durationMs,
-                    uploadDateText = streamItem.textualUploadDate
+                    uploadDateText = streamItem.textualUploadDate,
+                    viewCount = if (streamItem.viewCount >= 0) streamItem.viewCount else 0L,
+                    channelAvatarUrl = try {
+                        streamItem.uploaderAvatars?.firstOrNull()?.url?.ifBlank { null }
+                    } catch (_: Throwable) {
+                        null
+                    }
                 )
             }
         }

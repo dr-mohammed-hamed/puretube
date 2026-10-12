@@ -14,5 +14,6 @@ data class FeedVideoItem(
     val durationMs: Long = 0L,
     val uploadDateMs: Long = 0L,
     val uploadDateText: String? = null,
-    val viewCount: Long = 0L
+    val viewCount: Long = 0L,
+    val channelAvatarUrl: String? = null
 )

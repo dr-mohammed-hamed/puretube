@@ -189,6 +189,11 @@ open class ChannelRepository(
 
         val channelName = try { channelExtractor.name ?: "" } catch (_: Throwable) { "" }
         val channelId = try { channelExtractor.id ?: channelKey } catch (_: Throwable) { channelKey }
+        val channelAvatarUrl = try {
+            channelExtractor.avatars?.firstOrNull()?.url?.ifBlank { null }
+        } catch (_: Throwable) {
+            null
+        }
 
         val videos = items.filterIsInstance<StreamInfoItem>().take(limit).mapNotNull { item ->
             val rawUrl = item.url ?: return@mapNotNull null
@@ -212,6 +217,12 @@ open class ChannelRepository(
                 null
             }
 
+            val uploaderAvatar = try {
+                item.uploaderAvatars?.firstOrNull()?.url?.ifBlank { null }
+            } catch (_: Throwable) {
+                null
+            } ?: channelAvatarUrl
+
             FeedVideoItem(
                 videoId = videoId,
                 title = item.name ?: videoId,
@@ -221,7 +232,8 @@ open class ChannelRepository(
                 durationMs = durationMs,
                 uploadDateMs = uploadDateMs,
                 uploadDateText = item.textualUploadDate,
-                viewCount = item.viewCount
+                viewCount = if (item.viewCount >= 0) item.viewCount else 0L,
+                channelAvatarUrl = uploaderAvatar
             )
         }.distinctBy { it.videoId }
 
@@ -342,6 +354,11 @@ open class ChannelRepository(
 
             val channelName = try { channelExtractor.name ?: "" } catch (_: Throwable) { "" }
             val channelId = try { channelExtractor.id ?: channelIdOrUrl } catch (_: Throwable) { channelIdOrUrl }
+            val channelAvatarUrl = try {
+                channelExtractor.avatars?.firstOrNull()?.url?.ifBlank { null }
+            } catch (_: Throwable) {
+                null
+            }
 
             val liveVideos = items.filterIsInstance<StreamInfoItem>().mapNotNull { item ->
                 val rawUrl = item.url ?: return@mapNotNull null
@@ -364,6 +381,12 @@ open class ChannelRepository(
                     null
                 }
 
+                val uploaderAvatar = try {
+                    item.uploaderAvatars?.firstOrNull()?.url?.ifBlank { null }
+                } catch (_: Throwable) {
+                    null
+                } ?: channelAvatarUrl
+
                 FeedVideoItem(
                     videoId = videoId,
                     title = item.name ?: videoId,
@@ -373,7 +396,8 @@ open class ChannelRepository(
                     durationMs = durationMs,
                     uploadDateMs = uploadDateMs,
                     uploadDateText = item.textualUploadDate,
-                    viewCount = item.viewCount
+                    viewCount = if (item.viewCount >= 0) item.viewCount else 0L,
+                    channelAvatarUrl = uploaderAvatar
                 )
             }
 

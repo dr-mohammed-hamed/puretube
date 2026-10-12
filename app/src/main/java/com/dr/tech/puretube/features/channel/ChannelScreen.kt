@@ -3,7 +3,6 @@ package com.dr.tech.puretube.features.channel
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -149,8 +148,7 @@ fun ChannelScreen(
 
                 else -> {
                     uiState.profile?.let { profile ->
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Channel Header (Banner + Identity + Actions)
+                        val headerComposable: @Composable () -> Unit = {
                             ChannelHeader(
                                 profile = profile,
                                 isSubscribed = uiState.isSubscribed,
@@ -158,53 +156,62 @@ fun ChannelScreen(
                                 onSubscribeToggle = { viewModel.toggleSubscribe() },
                                 onDescriptionClick = { viewModel.selectTab(ChannelTabType.ABOUT) }
                             )
+                        }
 
-                            // Tabs Row (Videos | Playlists | Live | About)
+                        val tabsComposable: @Composable () -> Unit = {
                             ChannelTabsRow(
                                 selectedTab = uiState.selectedTab,
                                 onTabSelected = { viewModel.selectTab(it) }
                             )
+                        }
 
-                            // Active Tab Content
-                            Box(modifier = Modifier.weight(1f)) {
-                                when (uiState.selectedTab) {
-                                    ChannelTabType.VIDEOS -> {
-                                        ChannelVideosTab(
-                                            videos = uiState.videos,
-                                            sortOrder = uiState.sortOrder,
-                                            isLoading = uiState.isLoadingContent,
-                                            bookmarkedVideoIds = uiState.bookmarkedVideoIds,
-                                            onSortOrderChanged = { viewModel.changeSortOrder(it) },
-                                            onVideoClick = onVideoClick,
-                                            onBookmarkClick = { viewModel.toggleBookmark(it) },
-                                            errorMessage = uiState.errorMessage,
-                                            onRetry = { viewModel.refresh() }
-                                        )
-                                    }
-                                    ChannelTabType.PLAYLISTS -> {
-                                        ChannelPlaylistsTab(
-                                            playlists = uiState.playlists,
-                                            isLoading = uiState.isLoadingContent,
-                                            onPlaylistClick = { /* Can open playlist in future */ }
-                                        )
-                                    }
-                                    ChannelTabType.LIVE -> {
-                                        ChannelVideosTab(
-                                            videos = uiState.liveStreams,
-                                            sortOrder = ChannelSortOrder.LATEST,
-                                            isLoading = uiState.isLoadingContent,
-                                            bookmarkedVideoIds = uiState.bookmarkedVideoIds,
-                                            onSortOrderChanged = {},
-                                            onVideoClick = onVideoClick,
-                                            onBookmarkClick = { viewModel.toggleBookmark(it) },
-                                            errorMessage = uiState.errorMessage,
-                                            onRetry = { viewModel.refresh() }
-                                        )
-                                    }
-                                    ChannelTabType.ABOUT -> {
-                                        ChannelAboutTab(profile = profile)
-                                    }
-                                }
+                        when (uiState.selectedTab) {
+                            ChannelTabType.VIDEOS -> {
+                                ChannelVideosTab(
+                                    videos = uiState.videos,
+                                    sortOrder = uiState.sortOrder,
+                                    isLoading = uiState.isLoadingContent,
+                                    bookmarkedVideoIds = uiState.bookmarkedVideoIds,
+                                    onSortOrderChanged = { viewModel.changeSortOrder(it) },
+                                    onVideoClick = onVideoClick,
+                                    onBookmarkClick = { viewModel.toggleBookmark(it) },
+                                    headerContent = headerComposable,
+                                    tabsContent = tabsComposable,
+                                    errorMessage = uiState.errorMessage,
+                                    onRetry = { viewModel.refresh() }
+                                )
+                            }
+                            ChannelTabType.PLAYLISTS -> {
+                                ChannelPlaylistsTab(
+                                    playlists = uiState.playlists,
+                                    isLoading = uiState.isLoadingContent,
+                                    onPlaylistClick = { /* Can open playlist in future */ },
+                                    headerContent = headerComposable,
+                                    tabsContent = tabsComposable
+                                )
+                            }
+                            ChannelTabType.LIVE -> {
+                                ChannelVideosTab(
+                                    videos = uiState.liveStreams,
+                                    sortOrder = ChannelSortOrder.LATEST,
+                                    isLoading = uiState.isLoadingContent,
+                                    bookmarkedVideoIds = uiState.bookmarkedVideoIds,
+                                    onSortOrderChanged = {},
+                                    onVideoClick = onVideoClick,
+                                    onBookmarkClick = { viewModel.toggleBookmark(it) },
+                                    headerContent = headerComposable,
+                                    tabsContent = tabsComposable,
+                                    showSortChips = false,
+                                    errorMessage = uiState.errorMessage,
+                                    onRetry = { viewModel.refresh() }
+                                )
+                            }
+                            ChannelTabType.ABOUT -> {
+                                ChannelAboutTab(
+                                    profile = profile,
+                                    headerContent = headerComposable,
+                                    tabsContent = tabsComposable
+                                )
                             }
                         }
                     }

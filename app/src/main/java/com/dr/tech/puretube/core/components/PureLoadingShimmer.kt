@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -62,7 +60,7 @@ fun rememberPureShimmerBrush(): Brush {
 }
 
 /**
- * Shimmer placeholder mimicking the PureVideoCard layout.
+ * Shimmer placeholder mimicking the edge-to-edge PureVideoCard layout.
  */
 @Composable
 fun PureVideoCardShimmer(
@@ -70,77 +68,77 @@ fun PureVideoCardShimmer(
 ) {
     val shimmerBrush = rememberPureShimmerBrush()
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = PureTheme.colors.surface,
-        border = BorderStroke(1.dp, PureTheme.colors.borderOutline)
+    Column(
+        modifier = modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
+        // Thumbnail shimmer box (100% full width, 16:9, edge-to-edge)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .background(shimmerBrush)
+        )
+
+        // Metadata row matching PureVideoCard
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            // Thumbnail shimmer box
+            // Circular channel avatar placeholder (38dp)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(38.dp)
+                    .clip(CircleShape)
                     .background(shimmerBrush)
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Metadata row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+            // Middle: Title lines and subtitle
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp)
             ) {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    // Title line 1
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f)
-                            .height(18.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shimmerBrush)
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Title line 2
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.55f)
-                            .height(18.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shimmerBrush)
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Channel name & date line
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.4f)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shimmerBrush)
-                    )
-                }
-
-                Spacer(modifier = Modifier.size(8.dp))
-
-                // Bookmark icon placeholder
+                // Title line 1
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
+                        .fillMaxWidth(0.9f)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(shimmerBrush)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Title line 2
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.55f)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(shimmerBrush)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Channel name & date line
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.4f)
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(4.dp))
                         .background(shimmerBrush)
                 )
             }
+
+            // Bookmark icon placeholder
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(shimmerBrush)
+            )
         }
     }
 }
@@ -155,7 +153,7 @@ fun PureFeedShimmerList(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         repeat(count) {
             PureVideoCardShimmer()

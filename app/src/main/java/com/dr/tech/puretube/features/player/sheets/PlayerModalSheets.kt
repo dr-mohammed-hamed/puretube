@@ -7,7 +7,7 @@ import com.dr.tech.puretube.features.player.PlayerUiState
 
 /**
  * Modal sheets host for player settings: Playback Speed, Quality,
- * Captions and Sleep Timer.
+ * Captions, Sleep Timer, and More Options.
  * Conforms to Constitution Principles V, VI, VII:
  * Zero emojis, PureTheme tokens, < 100 LOC.
  */
@@ -19,15 +19,21 @@ fun PlayerModalSheets(
     isQualitySheetOpen: Boolean,
     isCaptionSheetOpen: Boolean,
     isSleepTimerSheetOpen: Boolean,
+    isMoreOptionsSheetOpen: Boolean = false,
     onDismissSpeed: () -> Unit,
     onDismissQuality: () -> Unit,
     onDismissCaption: () -> Unit,
     onDismissSleepTimer: () -> Unit,
+    onDismissMoreOptions: () -> Unit = {},
     onSpeedSelected: (Float) -> Unit,
     onQualitySelected: (PlaybackQuality) -> Unit,
     onCcToggle: (Boolean) -> Unit,
     onCaptionLanguageSelected: (String?) -> Unit,
-    onSleepTimerSelected: (SleepTimerOption) -> Unit
+    onSleepTimerSelected: (SleepTimerOption) -> Unit,
+    onPipClick: () -> Unit = {},
+    onAudioOnlyToggle: () -> Unit = {},
+    onZoomToFillToggle: () -> Unit = {},
+    onShareClick: () -> Unit = {}
 ) {
     if (isSpeedSheetOpen) {
         PlaybackSpeedSheet(
@@ -61,6 +67,18 @@ fun PlayerModalSheets(
             activeOption = uiState.activeSleepTimer,
             onDismiss = onDismissSleepTimer,
             onOptionSelected = onSleepTimerSelected
+        )
+    }
+
+    if (isMoreOptionsSheetOpen) {
+        PlayerMoreOptionsSheet(
+            isAudioOnly = uiState.isAudioOnly,
+            isZoomToFill = uiState.isZoomToFill,
+            onDismiss = onDismissMoreOptions,
+            onPipClick = onPipClick,
+            onAudioOnlyToggle = onAudioOnlyToggle,
+            onZoomToFillToggle = onZoomToFillToggle,
+            onShareClick = onShareClick
         )
     }
 }

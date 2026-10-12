@@ -191,6 +191,11 @@ class FeedRepository(
             val service = ServiceList.YouTube
             val channelExtractor = service.getChannelExtractor(targetUrl)
             channelExtractor.fetchPage()
+            val channelAvatarUrl = try {
+                channelExtractor.avatars?.firstOrNull()?.url?.ifBlank { null }
+            } catch (_: Throwable) {
+                null
+            }
 
             val tabs = channelExtractor.tabs ?: emptyList()
             android.util.Log.d(TAG, "Channel '$channelName': discovered ${tabs.size} tabs")
@@ -236,6 +241,12 @@ class FeedRepository(
                     null
                 }
 
+                val uploaderAvatar = try {
+                    item.uploaderAvatars?.firstOrNull()?.url?.ifBlank { null }
+                } catch (_: Throwable) {
+                    null
+                } ?: channelAvatarUrl
+
                 FeedVideoItem(
                     videoId = videoId,
                     title = title,
@@ -244,7 +255,9 @@ class FeedRepository(
                     thumbnailUrl = thumbnailUrl,
                     durationMs = durationMs,
                     uploadDateMs = uploadDateMs,
-                    uploadDateText = item.textualUploadDate
+                    uploadDateText = item.textualUploadDate,
+                    viewCount = if (item.viewCount >= 0) item.viewCount else 0L,
+                    channelAvatarUrl = uploaderAvatar
                 )
             }
 

@@ -35,6 +35,7 @@ fun PlayerViewport(
     onZoomToFillToggle: () -> Unit,
     onFullscreenToggle: () -> Unit,
     onPipClick: () -> Unit,
+    onMoreOptionsClick: () -> Unit = {},
     onBackClick: () -> Unit
 ) {
     Box(modifier = modifier) {
@@ -79,6 +80,7 @@ fun PlayerViewport(
             onZoomToFillToggle = onZoomToFillToggle,
             onFullscreenToggle = onFullscreenToggle,
             onPipClick = onPipClick,
+            onMoreOptionsClick = onMoreOptionsClick,
             onBackClick = onBackClick
         )
     }

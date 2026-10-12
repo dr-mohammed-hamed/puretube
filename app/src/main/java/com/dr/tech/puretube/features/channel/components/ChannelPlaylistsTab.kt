@@ -1,6 +1,7 @@
 package com.dr.tech.puretube.features.channel.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,51 +41,80 @@ import com.dr.tech.puretube.core.designsystem.theme.PureTheme
 
 /**
  * Playlists tab displaying channel's organized playlist cards.
+ * Supports header and sticky tabs directly inside LazyColumn for unified scrolling.
  * Conforms to Constitution Principles I, V, VI (< 300 LOC), VII.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChannelPlaylistsTab(
     playlists: List<ChannelPlaylistItem>,
     isLoading: Boolean,
     onPlaylistClick: (ChannelPlaylistItem) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    headerContent: (@Composable () -> Unit)? = null,
+    tabsContent: (@Composable () -> Unit)? = null
 ) {
     val context = LocalContext.current
 
-    Box(
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(PureTheme.colors.background)
+            .background(PureTheme.colors.background),
+        contentPadding = PaddingValues(bottom = 80.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (headerContent != null) {
+            item(key = "channel_header") {
+                headerContent()
+            }
+        }
+
+        if (tabsContent != null) {
+            stickyHeader(key = "channel_tabs") {
+                tabsContent()
+            }
+        }
+
         when {
             isLoading && playlists.isEmpty() -> {
-                CircularProgressIndicator(
-                    color = PureTheme.colors.primary,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .align(Alignment.Center)
-                )
+                item(key = "loading_state") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = PureTheme.colors.primary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
             }
 
             playlists.isEmpty() -> {
-                PureEmptyState(
-                    icon = Icons.AutoMirrored.Outlined.PlaylistPlay,
-                    title = "لا توجد قوائم تشغيل",
-                    description = "لم يقم هذا الناشر بإنشاء أي قوائم تشغيل عامة بعد.",
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                item(key = "empty_state") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        PureEmptyState(
+                            icon = Icons.AutoMirrored.Outlined.PlaylistPlay,
+                            title = "لا توجد قوائم تشغيل",
+                            description = "لم يقم هذا الناشر بإنشاء أي قوائم تشغيل عامة بعد."
+                        )
+                    }
+                }
             }
 
             else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(
-                        items = playlists,
-                        key = { it.playlistId }
-                    ) { playlist ->
+                items(
+                    items = playlists,
+                    key = { it.playlistId }
+                ) { playlist ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         Surface(
                             onClick = { onPlaylistClick(playlist) },
                             shape = RoundedCornerShape(14.dp),

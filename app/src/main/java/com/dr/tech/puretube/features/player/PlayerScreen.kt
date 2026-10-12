@@ -74,6 +74,7 @@ fun PlayerScreen(
     var isPlaylistSheetOpen by remember { mutableStateOf(false) }
     var playlistCheckedIds by remember { mutableStateOf(emptySet<Long>()) }
     var isSleepTimerSheetOpen by remember { mutableStateOf(false) }
+    var isMoreOptionsSheetOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val toggleErrorText = stringResource(R.string.player_toggle_error)
     val extractErrorText = stringResource(R.string.player_error_extract)
@@ -200,6 +201,7 @@ fun PlayerScreen(
                 onZoomToFillToggle = { viewModel.toggleZoomToFill() },
                 onFullscreenToggle = onToggleFullscreen,
                 onPipClick = onEnterPip,
+                onMoreOptionsClick = { isMoreOptionsSheetOpen = true },
                 onBackClick = { onBackAction(true) }
             )
 
@@ -248,6 +250,7 @@ fun PlayerScreen(
                     onZoomToFillToggle = { viewModel.toggleZoomToFill() },
                     onFullscreenToggle = onToggleFullscreen,
                     onPipClick = onEnterPip,
+                    onMoreOptionsClick = { isMoreOptionsSheetOpen = true },
                     onBackClick = { onBackAction(false) }
                 )
 
@@ -301,6 +304,21 @@ fun PlayerScreen(
         }
     }
 
+    val onShareVideo: () -> Unit = {
+        val shareTitle = uiState.videoDetails?.title.orEmpty()
+        val shareId = uiState.videoDetails?.videoId ?: videoId
+        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_SUBJECT, shareTitle)
+            putExtra(android.content.Intent.EXTRA_TEXT, "https://youtu.be/$shareId")
+        }
+        try {
+            context.startActivity(android.content.Intent.createChooser(shareIntent, "مشاركة الفيديو"))
+        } catch (e: Exception) {
+            android.util.Log.w("PlayerScreen", "Share failed", e)
+        }
+    }
+
     // Modal Sheets Host
     PlayerModalSheets(
         uiState = uiState,
@@ -309,15 +327,21 @@ fun PlayerScreen(
         isQualitySheetOpen = isQualitySheetOpen,
         isCaptionSheetOpen = isCaptionSheetOpen,
         isSleepTimerSheetOpen = isSleepTimerSheetOpen,
+        isMoreOptionsSheetOpen = isMoreOptionsSheetOpen,
         onDismissSpeed = { isSpeedSheetOpen = false },
         onDismissQuality = { isQualitySheetOpen = false },
         onDismissCaption = { isCaptionSheetOpen = false },
         onDismissSleepTimer = { isSleepTimerSheetOpen = false },
+        onDismissMoreOptions = { isMoreOptionsSheetOpen = false },
         onSpeedSelected = { viewModel.setPlaybackSpeed(it) },
         onQualitySelected = { viewModel.setQuality(it) },
         onCcToggle = { viewModel.setCcEnabled(it) },
         onCaptionLanguageSelected = { viewModel.setCaptionLanguage(it) },
-        onSleepTimerSelected = { viewModel.setSleepTimer(it) }
+        onSleepTimerSelected = { viewModel.setSleepTimer(it) },
+        onPipClick = onEnterPip,
+        onAudioOnlyToggle = { viewModel.setAudioOnly(!uiState.isAudioOnly) },
+        onZoomToFillToggle = { viewModel.toggleZoomToFill() },
+        onShareClick = onShareVideo
     )
 
     val sheetDetails = uiState.videoDetails
