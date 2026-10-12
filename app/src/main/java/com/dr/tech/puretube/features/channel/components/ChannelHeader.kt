@@ -1,6 +1,8 @@
 package com.dr.tech.puretube.features.channel.components
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -252,7 +254,13 @@ fun ChannelHeader(
                             val url = "https://www.youtube.com/channel/${profile.channelId}"
                             putExtra(Intent.EXTRA_TEXT, "${profile.channelName}: $url")
                         }
-                        context.startActivity(Intent.createChooser(shareIntent, "مشاركة القناة"))
+                        try {
+                            context.startActivity(Intent.createChooser(shareIntent, "مشاركة القناة"))
+                        } catch (e: ActivityNotFoundException) {
+                            Log.w("ChannelHeader", "Activity not found to handle share intent", e)
+                        } catch (e: Exception) {
+                            Log.w("ChannelHeader", "Failed to start share chooser", e)
+                        }
                     },
                     modifier = Modifier
                         .size(40.dp)

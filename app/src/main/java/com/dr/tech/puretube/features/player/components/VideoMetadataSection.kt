@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.dr.tech.puretube.core.data.model.ExtractedVideoDetails
 import com.dr.tech.puretube.core.designsystem.theme.PureTheme
+import com.dr.tech.puretube.core.util.ArabicTimeFormatter
 import com.dr.tech.puretube.features.player.util.TimestampParser
 import java.util.Locale
 
@@ -86,14 +87,19 @@ fun VideoMetadataSection(
                     color = PureTheme.colors.textSecondary
                 )
             }
-            details.uploadDateText?.let { dateText ->
+            val formattedDate = remember(details.uploadDateText) {
+                ArabicTimeFormatter.formatRelativeTime(0L, details.uploadDateText).takeIf { it.isNotBlank() }
+            }
+            if (formattedDate != null) {
+                if (details.viewCount > 0) {
+                    Text(
+                        text = "•",
+                        style = PureTheme.typography.labelSmall,
+                        color = PureTheme.colors.textSecondary
+                    )
+                }
                 Text(
-                    text = "•",
-                    style = PureTheme.typography.labelSmall,
-                    color = PureTheme.colors.textSecondary
-                )
-                Text(
-                    text = dateText,
+                    text = formattedDate,
                     style = PureTheme.typography.labelSmall,
                     color = PureTheme.colors.textSecondary
                 )

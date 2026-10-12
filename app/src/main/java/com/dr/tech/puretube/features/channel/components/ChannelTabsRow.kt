@@ -56,7 +56,9 @@ fun ChannelTabsRow(
                     .background(PureTheme.colors.borderOutline)
             )
         },
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .background(PureTheme.colors.background)
     ) {
         tabs.forEachIndexed { index, (tab, title) ->
             val isSelected = index == selectedIndex

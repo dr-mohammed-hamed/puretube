@@ -84,22 +84,22 @@ fun FeedScreen(
             )
 
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
             when {
                 state.isEmptySubscriptions -> {
                     FeedStarterBanner(
                         onActivateClick = { viewModel.activateStarterPack() },
-                        modifier = Modifier.align(Alignment.Center)
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 16.dp)
                     )
                 }
 
                 state.isLoading && state.videos.isEmpty() -> {
                     PureFeedShimmerList(
                         count = 3,
-                        modifier = Modifier.padding(top = 12.dp)
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 }
 
@@ -108,7 +108,9 @@ fun FeedScreen(
                         title = "تعذر تحميل الخلاصات",
                         message = state.errorMessage ?: "حدث خطأ غير متوقع",
                         onRetry = { viewModel.refresh(force = true) },
-                        modifier = Modifier.align(Alignment.Center)
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 16.dp)
                     )
                 }
 
@@ -119,14 +121,16 @@ fun FeedScreen(
                         description = "لم تقم القنوات المشترك بها بنشر مقاطع جديدة مؤخراً، أو اسحب للأسفل لتحديث الخلاصة.",
                         actionLabel = "تحديث الخلاصة",
                         onActionClick = { viewModel.refresh(force = true) },
-                        modifier = Modifier.align(Alignment.Center)
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 16.dp)
                     )
                 }
 
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         if (state.isRefreshing) {

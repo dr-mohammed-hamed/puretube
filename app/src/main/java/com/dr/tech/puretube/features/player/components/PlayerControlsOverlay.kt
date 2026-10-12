@@ -21,8 +21,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
@@ -68,13 +70,14 @@ fun PlayerControlsOverlay(
     onSeekTo: (Long) -> Unit,
     onSeekRelative: (Long) -> Unit,
     onScrubbingChange: (Boolean) -> Unit = {},
-    onAudioOnlyToggle: () -> Unit,
+    onAudioOnlyToggle: () -> Unit = {},
     onSpeedClick: () -> Unit,
     onQualityClick: () -> Unit,
     onSleepTimerClick: () -> Unit = {},
     onZoomToFillToggle: () -> Unit = {},
     onFullscreenToggle: () -> Unit = {},
-    onPipClick: () -> Unit,
+    onPipClick: () -> Unit = {},
+    onMoreOptionsClick: () -> Unit = {},
     onBackClick: () -> Unit
 ) {
     AnimatedVisibility(
@@ -83,11 +86,12 @@ fun PlayerControlsOverlay(
         exit = fadeOut(),
         modifier = modifier
     ) {
+        val insetsModifier = if (isFullscreen) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(PureTheme.colors.background.copy(alpha = 0.65f))
-                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .then(insetsModifier)
         ) {
             // 1. Top Bar: Navigation, Video Info (in fullscreen), & Player Options
             Row(
@@ -142,10 +146,9 @@ fun PlayerControlsOverlay(
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     OverlayIconButton(
-                        icon = Icons.Default.Headphones,
-                        contentDescription = "صوتي فقط",
-                        tint = if (isAudioOnly) PureTheme.colors.primary else PureTheme.colors.textSecondary,
-                        onClick = onAudioOnlyToggle
+                        icon = Icons.Default.Speed,
+                        contentDescription = "السرعة",
+                        onClick = onSpeedClick
                     )
                     OverlayIconButton(
                         icon = Icons.Default.HighQuality,
@@ -153,26 +156,23 @@ fun PlayerControlsOverlay(
                         onClick = onQualityClick
                     )
                     OverlayIconButton(
-                        icon = Icons.Default.Speed,
-                        contentDescription = "السرعة",
-                        onClick = onSpeedClick
-                    )
-                    OverlayIconButton(
-                        icon = Icons.Default.PictureInPictureAlt,
-                        contentDescription = "صورة داخل صورة",
-                        onClick = onPipClick
-                    )
-                    OverlayIconButton(
-                        icon = Icons.Default.FitScreen,
-                        contentDescription = if (isZoomToFill) "ملاءمة الشاشة (16:9)" else "ملء الشاشة",
-                        tint = if (isZoomToFill) PureTheme.colors.primary else PureTheme.colors.textSecondary,
-                        onClick = onZoomToFillToggle
-                    )
-                    OverlayIconButton(
                         icon = Icons.Default.Bedtime,
                         contentDescription = "مؤقت النوم",
                         tint = if (activeSleepTimer != SleepTimerOption.OFF) PureTheme.colors.secondary else PureTheme.colors.textSecondary,
                         onClick = onSleepTimerClick
+                    )
+                    OverlayIconButton(
+                        icon = if (isFullscreen) Icons.Default.FitScreen else Icons.Default.Fullscreen,
+                        contentDescription = if (isFullscreen) "ملاءمة الشاشة" else "ملء الشاشة",
+                        tint = if (isFullscreen && isZoomToFill) PureTheme.colors.primary else PureTheme.colors.textSecondary,
+                        onClick = {
+                            if (isFullscreen) onZoomToFillToggle() else onFullscreenToggle()
+                        }
+                    )
+                    OverlayIconButton(
+                        icon = Icons.Default.MoreVert,
+                        contentDescription = "خيارات إضافية",
+                        onClick = onMoreOptionsClick
                     )
                 }
             }

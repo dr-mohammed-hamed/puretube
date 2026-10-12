@@ -66,75 +66,76 @@ fun SubscriptionsScreen(
             onOpenImportExport = { showImportExportSheet = true }
         )
 
+        // Tidy Controls Section (Search bar, Feedback, Starter banner)
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 16.dp)
         ) {
-            // Search / Add Bar
             ChannelSearchBar(
                 onAddChannel = { viewModel.addChannel(it) },
                 isActionInProgress = state.isActionInProgress
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // User Feedback Banner (Success or Error)
             FeedbackBanner(
                 errorMessage = state.errorMessage,
                 userNoticeMessage = state.userNoticeMessage,
                 onDismiss = { viewModel.clearMessages() }
             )
 
-            // Starter Pack Quick Row
             StarterPackQuickAction(
                 isActivating = state.isActivatingPack,
                 onActivate = { viewModel.activateStarterPack() }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+        }
 
-            // Subscriptions List or Empty State
-            when {
-                state.isLoading && state.subscriptions.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = PureTheme.colors.primary,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                }
-
-                state.subscriptions.isEmpty() -> {
-                    PureEmptyState(
-                        icon = Icons.Outlined.Subscriptions,
-                        title = "لا توجد اشتراكات مسجلة",
-                        description = "أضف قنواتك المفضلة يدويًا أعلاه أو قم بتفعيل حزمة البداية النقية.",
-                        actionLabel = "تفعيل حزمة البداية",
-                        onActionClick = { viewModel.activateStarterPack() },
-                        modifier = Modifier.padding(top = 20.dp)
+        // Subscriptions List or Empty State
+        when {
+            state.isLoading && state.subscriptions.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = PureTheme.colors.primary,
+                        modifier = Modifier.size(36.dp)
                     )
                 }
+            }
 
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(
-                            items = state.subscriptions,
-                            key = { it.channelId }
-                        ) { channel ->
-                            ChannelListItem(
-                                channel = channel,
-                                onUnsubscribeClick = { viewModel.requestUnsubscribe(channel) },
-                                onClick = { onChannelClick(channel.channelId) }
-                            )
-                        }
+            state.subscriptions.isEmpty() -> {
+                PureEmptyState(
+                    icon = Icons.Outlined.Subscriptions,
+                    title = "لا توجد اشتراكات مسجلة",
+                    description = "أضف قنواتك المفضلة يدويًا أعلاه أو قم بتفعيل حزمة البداية النقية.",
+                    actionLabel = "تفعيل حزمة البداية",
+                    onActionClick = { viewModel.activateStarterPack() },
+                    modifier = Modifier
+                        .padding(top = 20.dp)
+                        .padding(horizontal = 16.dp)
+                )
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
+                ) {
+                    items(
+                        items = state.subscriptions,
+                        key = { it.channelId }
+                    ) { channel ->
+                        ChannelListItem(
+                            channel = channel,
+                            onUnsubscribeClick = { viewModel.requestUnsubscribe(channel) },
+                            onClick = { onChannelClick(channel.channelId) }
+                        )
                     }
                 }
             }
