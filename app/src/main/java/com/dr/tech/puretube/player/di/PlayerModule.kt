@@ -11,6 +11,8 @@ import org.koin.dsl.module
 val playerModule = module {
     single { PureMediaSourceFactory(context = androidContext()) }
 
+    single { com.dr.tech.puretube.core.data.repository.PlaybackPrefs(androidContext()) }
+
     single {
         PurePlayerManager(
             context = androidContext(),

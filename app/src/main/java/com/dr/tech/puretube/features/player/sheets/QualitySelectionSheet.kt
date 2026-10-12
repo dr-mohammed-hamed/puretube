@@ -36,15 +36,8 @@ fun QualitySelectionSheet(
     onQualitySelected: (PlaybackQuality) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val qualities = remember {
-        listOf(
-            PlaybackQuality.AUTO,
-            PlaybackQuality.HD_1080,
-            PlaybackQuality.HD_720,
-            PlaybackQuality.SD_480,
-            PlaybackQuality.SD_360
-        )
-    }
+    // Dynamic ladder: any future PlaybackQuality entry appears automatically (144p/240p included).
+    val qualities = remember { PlaybackQuality.entries.toList() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

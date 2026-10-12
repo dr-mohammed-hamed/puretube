@@ -11,11 +11,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +41,8 @@ fun VideoActionButtonsRow(
     onWatchLaterToggle: () -> Unit,
     onAudioOnlyToggle: () -> Unit,
     onSleepTimerClick: () -> Unit,
+    onAddToPlaylistClick: () -> Unit = {},
+    onCaptionClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -159,6 +163,58 @@ fun VideoActionButtonsRow(
                 )
                 Text(
                     text = "مؤقت النوم",
+                    style = PureTheme.typography.labelSmall,
+                    color = PureTheme.colors.textPrimary
+                )
+            }
+        }
+
+        // 5. Add to Playlist Action
+        Surface(
+            onClick = onAddToPlaylistClick,
+            shape = RoundedCornerShape(20.dp),
+            color = PureTheme.colors.surface,
+            border = BorderStroke(1.dp, PureTheme.colors.borderOutline)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.PlaylistAdd,
+                    contentDescription = "حفظ في قائمة",
+                    tint = PureTheme.colors.textSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "حفظ في قائمة",
+                    style = PureTheme.typography.labelSmall,
+                    color = PureTheme.colors.textPrimary
+                )
+            }
+        }
+
+        // 6. Captions Action
+        Surface(
+            onClick = onCaptionClick,
+            shape = RoundedCornerShape(20.dp),
+            color = PureTheme.colors.surface,
+            border = BorderStroke(1.dp, PureTheme.colors.borderOutline)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Subtitles,
+                    contentDescription = "الترجمة",
+                    tint = PureTheme.colors.textSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "الترجمة",
                     style = PureTheme.typography.labelSmall,
                     color = PureTheme.colors.textPrimary
                 )

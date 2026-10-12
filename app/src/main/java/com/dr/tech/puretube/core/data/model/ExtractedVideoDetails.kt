@@ -44,14 +44,16 @@ data class AudioStreamFormat(
 }
 
 /**
- * Supported user-selectable playback resolutions.
+ * Supported user-selectable playback resolutions (descending ladder).
  */
 enum class PlaybackQuality(val label: String, val targetHeight: Int) {
     AUTO("تلقائي", 0),
     HD_1080("1080p", 1080),
     HD_720("720p", 720),
     SD_480("480p", 480),
-    SD_360("360p", 360)
+    SD_360("360p", 360),
+    SD_240("240p", 240),
+    SD_144("144p", 144)
 }
 
 /**
@@ -71,5 +73,6 @@ data class ExtractedVideoDetails(
     val uploadDateText: String? = null,
     val description: String? = null,
     val videoStreams: List<VideoStreamFormat> = emptyList(),
-    val audioStreams: List<AudioStreamFormat> = emptyList()
+    val audioStreams: List<AudioStreamFormat> = emptyList(),
+    val subtitles: List<SubtitleTrack> = emptyList()
 )

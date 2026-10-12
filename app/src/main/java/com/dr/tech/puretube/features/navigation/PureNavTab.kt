@@ -5,10 +5,12 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Subscriptions
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Subscriptions
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -34,6 +36,11 @@ enum class PureNavTab(
         titleArabic = "المشاهدة لاحقاً",
         iconSelected = Icons.Filled.Bookmark,
         iconUnselected = Icons.Outlined.BookmarkBorder
+    ),
+    LIBRARY(
+        titleArabic = "المكتبة",
+        iconSelected = Icons.Filled.VideoLibrary,
+        iconUnselected = Icons.Outlined.VideoLibrary
     ),
     SETTINGS(
         titleArabic = "الإعدادات",

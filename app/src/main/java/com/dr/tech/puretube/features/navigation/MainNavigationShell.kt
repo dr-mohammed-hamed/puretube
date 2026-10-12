@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import com.dr.tech.puretube.core.components.PureBottomNavBar
 import com.dr.tech.puretube.core.designsystem.theme.PureTheme
 import com.dr.tech.puretube.features.feed.FeedScreen
+import com.dr.tech.puretube.features.library.LibraryScreen
 import com.dr.tech.puretube.features.settings.SettingsScreen
 import com.dr.tech.puretube.features.subscriptions.SubscriptionsScreen
 import com.dr.tech.puretube.features.watchlater.WatchLaterScreen
@@ -34,6 +35,8 @@ fun MainNavigationShell(
     modifier: Modifier = Modifier,
     onVideoClick: (String) -> Unit = {},
     onChannelClick: (String) -> Unit = {},
+    onSearchClick: () -> Unit = {},
+    onPlaylistClick: (Long) -> Unit = {},
     miniPlayerContent: @Composable () -> Unit = {}
 ) {
     var currentTab by rememberSaveable { mutableStateOf(PureNavTab.FEED) }
@@ -71,13 +74,20 @@ fun MainNavigationShell(
                 when (targetTab) {
                     PureNavTab.FEED -> FeedScreen(
                         onVideoClick = onVideoClick,
-                        onChannelClick = onChannelClick
+                        onChannelClick = onChannelClick,
+                        onSearchClick = onSearchClick
                     )
                     PureNavTab.SUBSCRIPTIONS -> SubscriptionsScreen(
                         onChannelClick = onChannelClick
                     )
                     PureNavTab.WATCH_LATER -> WatchLaterScreen(
                         onVideoClick = onVideoClick
+                    )
+                    PureNavTab.LIBRARY -> LibraryScreen(
+                        onVideoClick = onVideoClick,
+                        onChannelClick = onChannelClick,
+                        onPlaylistClick = onPlaylistClick,
+                        onSeeAllWatchLater = { currentTab = PureNavTab.WATCH_LATER }
                     )
                     PureNavTab.SETTINGS -> SettingsScreen()
                 }

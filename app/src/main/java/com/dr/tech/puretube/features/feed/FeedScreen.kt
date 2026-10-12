@@ -14,9 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,6 +52,7 @@ import org.koin.androidx.compose.koinViewModel
 fun FeedScreen(
     onVideoClick: (String) -> Unit = {},
     onChannelClick: (String) -> Unit = {},
+    onSearchClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: FeedViewModel = koinViewModel()
 ) {
@@ -80,7 +82,8 @@ fun FeedScreen(
             // Mindful Top App Header
             FeedHeader(
                 isRefreshing = state.isRefreshing,
-                onRefreshClick = { viewModel.refresh(force = true) }
+                onRefreshClick = { viewModel.refresh(force = true) },
+                onSearchClick = onSearchClick
             )
 
         Box(
@@ -146,10 +149,10 @@ fun FeedScreen(
                             }
                         }
 
-                        items(
+                        itemsIndexed(
                             items = state.videos,
-                            key = { it.videoId }
-                        ) { video ->
+                            key = { _, video -> video.videoId }
+                        ) { _, video ->
                             PureVideoCard(
                                 video = video,
                                 isBookmarked = video.videoId in state.bookmarkedVideoIds,
@@ -176,7 +179,8 @@ fun FeedScreen(
 @Composable
 private fun FeedHeader(
     isRefreshing: Boolean,
-    onRefreshClick: () -> Unit
+    onRefreshClick: () -> Unit,
+    onSearchClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -211,15 +215,27 @@ private fun FeedHeader(
             }
         }
 
-        IconButton(
-            onClick = onRefreshClick,
-            enabled = !isRefreshing
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = "تحديث الخلاصة",
-                tint = PureTheme.colors.primary
-            )
+            IconButton(onClick = onSearchClick) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "بحث",
+                    tint = PureTheme.colors.primary
+                )
+            }
+            IconButton(
+                onClick = onRefreshClick,
+                enabled = !isRefreshing
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "تحديث الخلاصة",
+                    tint = PureTheme.colors.primary
+                )
+            }
         }
     }
 }

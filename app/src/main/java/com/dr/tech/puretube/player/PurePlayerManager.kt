@@ -83,6 +83,12 @@ class PurePlayerManager(
     private val _playbackSpeed = MutableStateFlow(1.0f)
     val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
 
+    private val _captionLang = MutableStateFlow<String?>(null)
+    val captionLang: StateFlow<String?> = _captionLang.asStateFlow()
+
+    private val _ccEnabled = MutableStateFlow(false)
+    val ccEnabled: StateFlow<Boolean> = _ccEnabled.asStateFlow()
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
@@ -194,7 +200,10 @@ class PurePlayerManager(
             val mediaSource = mediaSourceFactory.createMediaSource(
                 details = details,
                 quality = _currentQuality.value,
-                isAudioOnly = _isAudioOnly.value
+                isAudioOnly = _isAudioOnly.value,
+                subtitleTracks = details.subtitles,
+                selectedLang = _captionLang.value,
+                ccEnabled = _ccEnabled.value
             )
 
             if (mediaSource != null) {
@@ -267,6 +276,56 @@ class PurePlayerManager(
         player.playbackParameters = PlaybackParameters(speed)
     }
 
+    /**
+     * Applies persisted prefs state without rebuilding the current source.
+     * Used by PlayerViewModel before loadVideo so the fresh source is built
+     * with the correct speed/quality/captions in a single prepare.
+     */
+    fun applyStoredPrefs(
+        speed: Float,
+        quality: PlaybackQuality,
+        captionLang: String?,
+        ccEnabled: Boolean
+    ) {
+        _playbackSpeed.value = speed
+        player.playbackParameters = PlaybackParameters(speed)
+        _currentQuality.value = quality
+        _captionLang.value = captionLang?.trim()?.ifBlank { null }
+        _ccEnabled.value = ccEnabled
+    }
+
+    /**
+     * Applies caption language + CC toggle, rebuilding the media source
+     * with the selected subtitle track while preserving position.
+     * No-op state store when no video is loaded yet (loadVideo picks it up).
+     */
+    fun setCaption(languageCode: String?, ccEnabled: Boolean) {
+        val normalized = languageCode?.trim()?.ifBlank { null }
+        val langChanged = _captionLang.value != normalized
+        val ccChanged = _ccEnabled.value != ccEnabled
+        _captionLang.value = normalized
+        _ccEnabled.value = ccEnabled
+        if (!langChanged && !ccChanged) return
+
+        val details = _currentVideoDetails.value ?: return
+        val currentPos = player.currentPosition
+        val wasPlaying = player.isPlaying
+
+        val mediaSource = mediaSourceFactory.createMediaSource(
+            details = details,
+            quality = _currentQuality.value,
+            isAudioOnly = _isAudioOnly.value,
+            subtitleTracks = details.subtitles,
+            selectedLang = normalized,
+            ccEnabled = ccEnabled
+        ) ?: return
+
+        player.setMediaSource(mediaSource)
+        player.prepare()
+        player.seekTo(currentPos)
+        player.playWhenReady = wasPlaying
+    }
+
     fun setQuality(quality: PlaybackQuality) {
         if (_currentQuality.value == quality) return
         _currentQuality.value = quality
@@ -278,7 +337,10 @@ class PurePlayerManager(
         val mediaSource = mediaSourceFactory.createMediaSource(
             details = details,
             quality = quality,
-            isAudioOnly = _isAudioOnly.value
+            isAudioOnly = _isAudioOnly.value,
+            subtitleTracks = details.subtitles,
+            selectedLang = _captionLang.value,
+            ccEnabled = _ccEnabled.value
         ) ?: return
 
         player.setMediaSource(mediaSource)
@@ -298,7 +360,10 @@ class PurePlayerManager(
         val mediaSource = mediaSourceFactory.createMediaSource(
             details = details,
             quality = _currentQuality.value,
-            isAudioOnly = enabled
+            isAudioOnly = enabled,
+            subtitleTracks = details.subtitles,
+            selectedLang = _captionLang.value,
+            ccEnabled = _ccEnabled.value
         ) ?: return
 
         player.setMediaSource(mediaSource)
@@ -340,7 +405,7 @@ class PurePlayerManager(
                 try {
                     val refreshResult = videoDetailsRepository.extractVideoDetails(details.videoId)
                     refreshResult.onSuccess { freshDetails ->
-                        if (_currentVideoDetails.value != null) {
+                        if (_currentVideoDetails.value?.videoId == details.videoId) {
                             _currentVideoDetails.value = freshDetails
                             loadVideo(freshDetails, savedPositionMs)
                         }

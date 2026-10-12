@@ -144,6 +144,7 @@ class FeedRepository(
                 }
 
                 val allVideos = successfulFetches.flatMap { it.getOrDefault(emptyList()) }
+                    .distinctBy { it.videoId }
                 android.util.Log.d(TAG, "Total extracted videos across all channels: ${allVideos.size}")
 
                 // Sort reverse-chronologically (newest uploads first)
@@ -270,10 +271,10 @@ class FeedRepository(
         fun extractVideoId(url: String): String {
             val cleaned = url.trim()
             return when {
-                cleaned.contains("v=") -> cleaned.substringAfter("v=").substringBefore("&")
-                cleaned.contains("youtu.be/") -> cleaned.substringAfter("youtu.be/").substringBefore("?").substringBefore("/")
-                cleaned.contains("/shorts/") -> cleaned.substringAfter("/shorts/").substringBefore("?").substringBefore("/")
-                else -> cleaned.substringAfterLast("/")
+                cleaned.contains("v=") -> cleaned.substringAfter("v=").substringBefore("&").substringBefore("?").substringBefore("#").substringBefore("/")
+                cleaned.contains("youtu.be/") -> cleaned.substringAfter("youtu.be/").substringBefore("?").substringBefore("&").substringBefore("#").substringBefore("/")
+                cleaned.contains("/shorts/") -> cleaned.substringAfter("/shorts/").substringBefore("?").substringBefore("&").substringBefore("#").substringBefore("/")
+                else -> cleaned.substringAfterLast("/").substringBefore("?").substringBefore("&").substringBefore("#")
             }
         }
     }

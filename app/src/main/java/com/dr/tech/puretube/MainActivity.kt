@@ -29,6 +29,8 @@ import com.dr.tech.puretube.features.channel.ChannelScreen
 import com.dr.tech.puretube.features.navigation.MainNavigationShell
 import com.dr.tech.puretube.features.player.components.PlayerVideoSurface
 import com.dr.tech.puretube.features.player.PlayerScreen
+import com.dr.tech.puretube.features.playlists.PlaylistDetailScreen
+import com.dr.tech.puretube.features.search.SearchScreen
 import com.dr.tech.puretube.player.PurePlayerManager
 import org.koin.android.ext.android.inject
 
@@ -39,16 +41,31 @@ sealed interface ScreenDestination {
     data object Shell : ScreenDestination
     data class Player(val videoId: String) : ScreenDestination
     data class Channel(val channelId: String) : ScreenDestination
+    data class Search(val initialQuery: String? = null) : ScreenDestination
+    data class PlaylistDetail(val playlistId: Long) : ScreenDestination
 
     companion object {
         fun serialize(destination: ScreenDestination): String = when (destination) {
             is Shell -> "shell"
             is Player -> "player:${destination.videoId}"
             is Channel -> "channel:${destination.channelId}"
+            is Search -> if (destination.initialQuery.isNullOrBlank()) {
+                "search"
+            } else {
+                "search:${destination.initialQuery}"
+            }
+            is PlaylistDetail -> "playlist:${destination.playlistId}"
         }
         fun deserialize(value: String): ScreenDestination = when {
             value.startsWith("player:") -> Player(value.removePrefix("player:"))
             value.startsWith("channel:") -> Channel(value.removePrefix("channel:"))
+            value.startsWith("playlist:") -> PlaylistDetail(
+                value.removePrefix("playlist:").toLongOrNull() ?: 0L
+            )
+            value.startsWith("search:") -> Search(
+                value.removePrefix("search:").ifBlank { null }
+            )
+            value == "search" -> Search(null)
             else -> Shell
         }
     }
@@ -103,6 +120,12 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            val popBack: () -> Unit = {
+                if (backstack.size > 1) {
+                    backstack.removeAt(backstack.lastIndex)
+                }
+            }
+
             PureTheme(preset = currentPreset) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -136,14 +159,36 @@ class MainActivity : ComponentActivity() {
                             is ScreenDestination.Channel -> {
                                 ChannelScreen(
                                     channelId = current.channelId,
-                                    onBackClick = {
-                                        if (backstack.size > 1) {
-                                            backstack.removeAt(backstack.lastIndex)
-                                        }
-                                    },
+                                    onBackClick = popBack,
                                     onVideoClick = { videoId ->
                                         navigateTo(ScreenDestination.Player(videoId))
                                     },
+                                    miniPlayerContent = miniPlayer
+                                )
+                            }
+                            is ScreenDestination.Search -> {
+                                SearchScreen(
+                                    initialQuery = current.initialQuery,
+                                    onVideoClick = { videoId ->
+                                        navigateTo(ScreenDestination.Player(videoId))
+                                    },
+                                    onChannelClick = { channelId ->
+                                        navigateTo(ScreenDestination.Channel(channelId))
+                                    },
+                                    onBackClick = popBack,
+                                    miniPlayerContent = miniPlayer
+                                )
+                            }
+                            is ScreenDestination.PlaylistDetail -> {
+                                PlaylistDetailScreen(
+                                    playlistId = current.playlistId,
+                                    onVideoClick = { videoId ->
+                                        navigateTo(ScreenDestination.Player(videoId))
+                                    },
+                                    onChannelClick = { channelId ->
+                                        navigateTo(ScreenDestination.Channel(channelId))
+                                    },
+                                    onBackClick = popBack,
                                     miniPlayerContent = miniPlayer
                                 )
                             }
@@ -154,6 +199,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onChannelClick = { channelId ->
                                         navigateTo(ScreenDestination.Channel(channelId))
+                                    },
+                                    onSearchClick = {
+                                        navigateTo(ScreenDestination.Search())
+                                    },
+                                    onPlaylistClick = { playlistId ->
+                                        navigateTo(ScreenDestination.PlaylistDetail(playlistId))
                                     },
                                     miniPlayerContent = miniPlayer
                                 )

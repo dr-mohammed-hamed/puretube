@@ -3,9 +3,14 @@ package com.dr.tech.puretube.core.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.dr.tech.puretube.core.database.dao.HistoryDao
+import com.dr.tech.puretube.core.database.dao.PlaylistDao
+import com.dr.tech.puretube.core.database.dao.SearchHistoryDao
 import com.dr.tech.puretube.core.database.dao.SubscriptionDao
 import com.dr.tech.puretube.core.database.dao.WatchLaterDao
 import com.dr.tech.puretube.core.database.entity.HistoryEntity
+import com.dr.tech.puretube.core.database.entity.PlaylistEntity
+import com.dr.tech.puretube.core.database.entity.PlaylistItemEntity
+import com.dr.tech.puretube.core.database.entity.SearchHistoryEntity
 import com.dr.tech.puretube.core.database.entity.SubscriptionEntity
 import com.dr.tech.puretube.core.database.entity.WatchLaterEntity
 
@@ -18,13 +23,18 @@ import com.dr.tech.puretube.core.database.entity.WatchLaterEntity
     entities = [
         SubscriptionEntity::class,
         WatchLaterEntity::class,
-        HistoryEntity::class
+        HistoryEntity::class,
+        PlaylistEntity::class,
+        PlaylistItemEntity::class,
+        SearchHistoryEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class PureTubeDatabase : RoomDatabase() {
     abstract fun subscriptionDao(): SubscriptionDao
     abstract fun watchLaterDao(): WatchLaterDao
     abstract fun historyDao(): HistoryDao
+    abstract fun playlistDao(): PlaylistDao
+    abstract fun searchHistoryDao(): SearchHistoryDao
 }

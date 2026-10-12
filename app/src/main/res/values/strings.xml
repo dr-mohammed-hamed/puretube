@@ -7,4 +7,23 @@
     <string name="player_error_extract">تعذر استخراج بيانات الفيديو</string>
     <string name="player_toggle_error">تعذر حفظ التغيير، حاول مجدداً</string>
     <string name="playback_notification_channel_name">تشغيل الصوت في الخلفية</string>
+    <!-- Search / Library / Playlists / Captions (Arabic-only UI) -->
+    <string name="search_title">بحث</string>
+    <string name="search_hint">ابحث عن فيديو أو قناة</string>
+    <string name="search_clear">مسح البحث</string>
+    <string name="search_no_results">لا توجد نتائج</string>
+    <string name="search_history_title">عمليات البحث السابقة</string>
+    <string name="search_history_clear">مسح السجل</string>
+    <string name="library_title">المكتبة</string>
+    <string name="library_continue_watching">مواصلة المشاهدة</string>
+    <string name="library_my_playlists">قوائمي</string>
+    <string name="playlist_create">إنشاء قائمة</string>
+    <string name="playlist_create_title">إنشاء قائمة جديدة</string>
+    <string name="playlist_import">استيراد قائمة</string>
+    <string name="playlist_import_hint">استيراد: الصق رابط قائمة يوتيوب</string>
+    <string name="playlist_play_all">تشغيل الكل</string>
+    <string name="captions_title">الترجمة</string>
+    <string name="captions_enable">تفعيل الترجمة</string>
+    <string name="captions_off">إيقاف الترجمة</string>
+    <string name="captions_unavailable">لا توجد ترجمات متاحة لهذا المقطع</string>
 </resources>

@@ -35,12 +35,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dr.tech.puretube.R
 import com.dr.tech.puretube.core.components.PureErrorState
 import com.dr.tech.puretube.core.components.PureFeedShimmerList
+import com.dr.tech.puretube.core.data.model.FeedVideoItem
 import com.dr.tech.puretube.core.designsystem.theme.PureTheme
 import com.dr.tech.puretube.features.player.components.MindfulRelatedList
 import com.dr.tech.puretube.features.player.components.PlayerVideoSurface
 import com.dr.tech.puretube.features.player.components.PlayerViewport
 import com.dr.tech.puretube.features.player.components.VideoMetadataSection
 import com.dr.tech.puretube.features.player.sheets.PlayerModalSheets
+import com.dr.tech.puretube.features.playlists.sheets.AddToPlaylistSheet
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
@@ -61,10 +63,16 @@ fun PlayerScreen(
     onChannelClick: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val captionState by viewModel.captionUiState.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlistsFlow.collectAsStateWithLifecycle()
+    val importState by viewModel.playlistImportState.collectAsStateWithLifecycle()
     var areControlsVisible by remember { mutableStateOf(true) }
     var isScrubbing by remember { mutableStateOf(false) }
     var isSpeedSheetOpen by remember { mutableStateOf(false) }
     var isQualitySheetOpen by remember { mutableStateOf(false) }
+    var isCaptionSheetOpen by remember { mutableStateOf(false) }
+    var isPlaylistSheetOpen by remember { mutableStateOf(false) }
+    var playlistCheckedIds by remember { mutableStateOf(emptySet<Long>()) }
     var isSleepTimerSheetOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val toggleErrorText = stringResource(R.string.player_toggle_error)
@@ -82,11 +90,20 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
 
-    val onToggleFullscreen: () -> Unit = {
-        activity?.requestedOrientation = if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    val onToggleFullscreen: () -> Unit = remember(isLandscape, activity) {
+        {
+            activity?.requestedOrientation = if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
     }
 
     LaunchedEffect(videoId) { viewModel.loadVideo(videoId) }
+
+    val currentDetailsId = uiState.videoDetails?.videoId
+    LaunchedEffect(isPlaylistSheetOpen, currentDetailsId) {
+        if (isPlaylistSheetOpen && !currentDetailsId.isNullOrBlank()) {
+            playlistCheckedIds = viewModel.playlistMembership(currentDetailsId)
+        }
+    }
 
     LaunchedEffect(uiState.toggleErrorMessage) {
         val msg = uiState.toggleErrorMessage
@@ -128,12 +145,14 @@ fun PlayerScreen(
         }
     }
 
-    val onBackAction: (Boolean) -> Unit = { isFullscreen ->
-        if (isFullscreen) {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        } else {
-            viewModel.persistCurrentPlaybackPosition()
-            onBackClick()
+    val onBackAction: (Boolean) -> Unit = remember(isLandscape, activity, onBackClick) {
+        { isFullscreen ->
+            if (isFullscreen) {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            } else {
+                viewModel.persistCurrentPlaybackPosition()
+                onBackClick()
+            }
         }
     }
 
@@ -262,6 +281,8 @@ fun PlayerScreen(
                                     onWatchLaterToggle = { viewModel.toggleWatchLater() },
                                     onAudioOnlyToggle = { viewModel.setAudioOnly(!uiState.isAudioOnly) },
                                     onSleepTimerClick = { isSleepTimerSheetOpen = true },
+                                    onAddToPlaylistClick = { isPlaylistSheetOpen = true },
+                                    onCaptionClick = { isCaptionSheetOpen = true },
                                     onSeekTo = { posMs -> viewModel.seekTo(posMs) },
                                     onChannelClick = { onChannelClick(details.channelId) }
                                 )
@@ -283,14 +304,63 @@ fun PlayerScreen(
     // Modal Sheets Host
     PlayerModalSheets(
         uiState = uiState,
+        captionState = captionState,
         isSpeedSheetOpen = isSpeedSheetOpen,
         isQualitySheetOpen = isQualitySheetOpen,
+        isCaptionSheetOpen = isCaptionSheetOpen,
         isSleepTimerSheetOpen = isSleepTimerSheetOpen,
         onDismissSpeed = { isSpeedSheetOpen = false },
         onDismissQuality = { isQualitySheetOpen = false },
+        onDismissCaption = { isCaptionSheetOpen = false },
         onDismissSleepTimer = { isSleepTimerSheetOpen = false },
         onSpeedSelected = { viewModel.setPlaybackSpeed(it) },
         onQualitySelected = { viewModel.setQuality(it) },
+        onCcToggle = { viewModel.setCcEnabled(it) },
+        onCaptionLanguageSelected = { viewModel.setCaptionLanguage(it) },
         onSleepTimerSelected = { viewModel.setSleepTimer(it) }
     )
+
+    val sheetDetails = uiState.videoDetails
+    if (isPlaylistSheetOpen && sheetDetails != null) {
+        val sheetVideo = remember(sheetDetails) {
+            FeedVideoItem(
+                videoId = sheetDetails.videoId,
+                title = sheetDetails.title,
+                channelId = sheetDetails.channelId,
+                channelName = sheetDetails.channelName,
+                thumbnailUrl = sheetDetails.thumbnailUrl,
+                durationMs = sheetDetails.durationMs
+            )
+        }
+        AddToPlaylistSheet(
+            videoTitle = sheetVideo.title,
+            playlists = playlists,
+            checkedIds = playlistCheckedIds,
+            importState = importState,
+            onToggle = { playlistId, checked ->
+                viewModel.toggleInPlaylist(
+                    playlistId = playlistId,
+                    videoId = sheetVideo.videoId,
+                    title = sheetVideo.title,
+                    channelId = sheetVideo.channelId,
+                    channelName = sheetVideo.channelName,
+                    thumbnailUrl = sheetVideo.thumbnailUrl,
+                    durationMs = sheetVideo.durationMs,
+                    currentlyIn = !checked
+                ) { nowIn ->
+                    playlistCheckedIds = if (nowIn) {
+                        playlistCheckedIds + playlistId
+                    } else {
+                        playlistCheckedIds - playlistId
+                    }
+                }
+            },
+            onCreatePlaylist = { name -> viewModel.createPlaylist(name) },
+            onImportUrl = { url -> viewModel.importPlaylistFromUrl(url) },
+            onDismiss = {
+                viewModel.clearPlaylistImportError()
+                isPlaylistSheetOpen = false
+            }
+        )
+    }
 }

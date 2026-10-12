@@ -223,7 +223,7 @@ open class ChannelRepository(
                 uploadDateText = item.textualUploadDate,
                 viewCount = item.viewCount
             )
-        }
+        }.distinctBy { it.videoId }
 
         Log.d(TAG, "<-- Channel '$channelKey': Successfully parsed ${videos.size} videos")
 

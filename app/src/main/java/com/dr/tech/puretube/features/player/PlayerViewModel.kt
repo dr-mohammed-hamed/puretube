@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.dr.tech.puretube.core.data.model.ExtractedVideoDetails
 import com.dr.tech.puretube.core.data.model.FeedVideoItem
 import com.dr.tech.puretube.core.data.model.PlaybackQuality
+import com.dr.tech.puretube.core.data.model.SubtitleTrack
 import com.dr.tech.puretube.core.data.repository.HistoryRepository
+import com.dr.tech.puretube.core.data.repository.PlaybackPrefs
+import com.dr.tech.puretube.core.data.repository.PlaylistRepository
 import com.dr.tech.puretube.core.data.repository.SubscriptionRepository
 import com.dr.tech.puretube.core.data.repository.VideoDetailsRepository
 import com.dr.tech.puretube.core.data.repository.WatchLaterRepository
@@ -20,13 +23,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class PlayerUiState(
     val isLoading: Boolean = true,
@@ -47,6 +53,12 @@ data class PlayerUiState(
     val activeSleepTimer: SleepTimerOption = SleepTimerOption.OFF
 )
 
+data class CaptionUiState(
+    val ccEnabled: Boolean = false,
+    val selectedLang: String? = null,
+    val tracks: List<SubtitleTrack> = emptyList()
+)
+
 /**
  * ViewModel managing player state, video details extraction, and database syncing.
  * History loop delegated to [PlayerPlaybackSyncHelper]. Constitution V/VI/IX:
@@ -61,11 +73,28 @@ class PlayerViewModel(
     private val videoDetailsRepository: VideoDetailsRepository,
     private val historyRepository: HistoryRepository,
     private val subscriptionRepository: SubscriptionRepository,
-    private val watchLaterRepository: WatchLaterRepository
+    private val watchLaterRepository: WatchLaterRepository,
+    private val playbackPrefs: PlaybackPrefs? = null,
+    private val playlistRepository: PlaylistRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
+
+    private val _captionUiState = MutableStateFlow(CaptionUiState())
+    val captionUiState: StateFlow<CaptionUiState> = _captionUiState.asStateFlow()
+
+    private val _playlistImportState = MutableStateFlow(com.dr.tech.puretube.features.playlists.PlaylistImportState())
+    val playlistImportState: StateFlow<com.dr.tech.puretube.features.playlists.PlaylistImportState> = _playlistImportState.asStateFlow()
+
+    val playlistsFlow: StateFlow<List<com.dr.tech.puretube.core.database.entity.PlaylistEntity>> =
+        (playlistRepository?.getPlaylistsFlow()
+            ?: kotlinx.coroutines.flow.flowOf(emptyList()))
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList()
+            )
 
     private var currentVideoId: String? = null
     private val coroutineExceptionHandler = CoroutineExceptionHandler { _, throwable ->
@@ -88,6 +117,8 @@ class PlayerViewModel(
     private val collectorJobs = CopyOnWriteArrayList<Job>()
     private val togglingSubs = ConcurrentHashMap.newKeySet<String>()
     private val togglingWatch = ConcurrentHashMap.newKeySet<String>()
+    private val togglingPlaylist = ConcurrentHashMap.newKeySet<Pair<Long, String>>()
+    private val creatingPlaylist = AtomicBoolean(false)
 
     init {
         observePlayerManagerState()
@@ -106,6 +137,16 @@ class PlayerViewModel(
         trackCollect(playerManager.isAudioOnly) { s, v -> s.copy(isAudioOnly = v) }
         trackCollect(playerManager.playbackSpeed) { s, v -> s.copy(playbackSpeed = v) }
         trackCollect(playerManager.errorMessage) { s, v -> s.copy(errorMessage = v) }
+        collectorJobs += viewModelScope.launch(coroutineExceptionHandler) {
+            playerManager.ccEnabled.collect { enabled ->
+                _captionUiState.update { it.copy(ccEnabled = enabled) }
+            }
+        }
+        collectorJobs += viewModelScope.launch(coroutineExceptionHandler) {
+            playerManager.captionLang.collect { lang ->
+                _captionUiState.update { it.copy(selectedLang = lang) }
+            }
+        }
     }
 
     fun loadVideo(videoId: String, force: Boolean = false) {
@@ -220,6 +261,23 @@ class PlayerViewModel(
                     loadChannelVideos(details.channelId)
                     if (requestId != currentVideoId) return@launch
                 }
+                playbackPrefs?.let { prefs ->
+                    playerManager.applyStoredPrefs(
+                        speed = prefs.speed.value,
+                        quality = prefs.quality.value,
+                        captionLang = prefs.captionLang.value,
+                        ccEnabled = prefs.ccEnabled.value
+                    )
+                    _captionUiState.update {
+                        it.copy(
+                            ccEnabled = prefs.ccEnabled.value,
+                            selectedLang = prefs.captionLang.value,
+                            tracks = details.subtitles
+                        )
+                    }
+                } ?: run {
+                    _captionUiState.update { it.copy(tracks = details.subtitles) }
+                }
                 playerManager.loadVideo(details, startPositionMs = savedPosition)
                 if (requestId != currentVideoId) return@launch
                 startHistorySync()
@@ -289,9 +347,127 @@ class PlayerViewModel(
 
     fun seekTo(positionMs: Long) = playerManager.seekTo(positionMs)
     fun seekRelative(offsetMs: Long) = playerManager.seekRelative(offsetMs)
-    fun setPlaybackSpeed(speed: Float) = playerManager.setPlaybackSpeed(speed)
-    fun setQuality(quality: PlaybackQuality) = playerManager.setQuality(quality)
+    fun setPlaybackSpeed(speed: Float) {
+        playbackPrefs?.setSpeed(speed)
+        playerManager.setPlaybackSpeed(playbackPrefs?.speed?.value ?: speed)
+    }
+    fun setQuality(quality: PlaybackQuality) {
+        playbackPrefs?.setQuality(quality)
+        playerManager.setQuality(quality)
+    }
     fun setAudioOnly(enabled: Boolean) = playerManager.setAudioOnly(enabled)
+
+    fun setCcEnabled(enabled: Boolean) {
+        playbackPrefs?.setCcEnabled(enabled)
+        playerManager.setCaption(
+            languageCode = playbackPrefs?.captionLang?.value ?: _captionUiState.value.selectedLang,
+            ccEnabled = enabled
+        )
+        _captionUiState.update { it.copy(ccEnabled = enabled) }
+    }
+
+    fun setCaptionLanguage(languageCode: String?) {
+        val shouldEnable = !languageCode.isNullOrBlank()
+        playbackPrefs?.setCaptionLang(languageCode)
+        playbackPrefs?.setCcEnabled(shouldEnable)
+        playerManager.setCaption(
+            languageCode = languageCode,
+            ccEnabled = shouldEnable
+        )
+        _captionUiState.update {
+            it.copy(
+                selectedLang = languageCode,
+                ccEnabled = shouldEnable
+            )
+        }
+    }
+
+    suspend fun playlistMembership(videoId: String): Set<Long> {
+        val repo = playlistRepository ?: return emptySet()
+        if (videoId.isBlank()) return emptySet()
+        return repo.getPlaylistIdsForVideo(videoId)
+    }
+
+    fun toggleInPlaylist(
+        playlistId: Long,
+        videoId: String,
+        title: String,
+        channelId: String,
+        channelName: String,
+        thumbnailUrl: String? = null,
+        durationMs: Long = 0L,
+        currentlyIn: Boolean,
+        onDone: (Boolean) -> Unit = {}
+    ) {
+        val repo = playlistRepository ?: return
+        val toggleKey = playlistId to videoId
+        if (!togglingPlaylist.add(toggleKey)) return
+        viewModelScope.launch(coroutineExceptionHandler) {
+            try {
+                if (currentlyIn) {
+                    repo.removeFromPlaylist(playlistId, videoId).onSuccess { onDone(false) }
+                        .onFailure { _uiState.update { it.copy(toggleErrorMessage = "تعذر حفظ التغيير، حاول مجدداً") } }
+                } else {
+                    repo.addToPlaylist(
+                        playlistId = playlistId,
+                        videoId = videoId,
+                        title = title,
+                        channelId = channelId,
+                        channelName = channelName,
+                        thumbnailUrl = thumbnailUrl,
+                        durationMs = durationMs
+                    ).onSuccess { onDone(true) }
+                        .onFailure { _uiState.update { it.copy(toggleErrorMessage = "تعذر حفظ التغيير، حاول مجدداً") } }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.update { it.copy(toggleErrorMessage = "تعذر حفظ التغيير، حاول مجدداً") }
+            } finally {
+                togglingPlaylist.remove(toggleKey)
+            }
+        }
+    }
+
+    fun createPlaylist(name: String, onCreated: (Long) -> Unit = {}) {
+        if (!creatingPlaylist.compareAndSet(false, true)) return
+        val repo = playlistRepository ?: run { creatingPlaylist.set(false); return }
+        viewModelScope.launch(coroutineExceptionHandler) {
+            try {
+                repo.createPlaylist(name).onSuccess { onCreated(it) }
+                    .onFailure { _uiState.update { it.copy(toggleErrorMessage = "تعذر إنشاء القائمة") } }
+            } finally {
+                creatingPlaylist.set(false)
+            }
+        }
+    }
+
+    fun importPlaylistFromUrl(url: String, onImported: (Long) -> Unit = {}) {
+        if (_playlistImportState.value.isLoading) return
+        val repo = playlistRepository ?: return
+        val trimmed = url.trim()
+        if (trimmed.isBlank()) {
+            _playlistImportState.update { it.copy(errorMessage = "رابط القائمة فارغ") }
+            return
+        }
+        _playlistImportState.update { it.copy(isLoading = true, errorMessage = null, successPlaylistId = null) }
+        viewModelScope.launch(coroutineExceptionHandler) {
+            repo.importFromYoutubeUrl(trimmed).onSuccess { id ->
+                _playlistImportState.update {
+                    it.copy(isLoading = false, errorMessage = null, successPlaylistId = id)
+                }
+                onImported(id)
+            }.onFailure {
+                _playlistImportState.update {
+                    it.copy(isLoading = false, errorMessage = "تعذر استيراد القائمة، تحقق من صحة الرابط والاتصال")
+                }
+            }
+        }
+    }
+
+    fun clearPlaylistImportError() {
+        _playlistImportState.update { it.copy(errorMessage = null) }
+    }
 
     fun toggleZoomToFill() {
         _uiState.update { it.copy(isZoomToFill = !it.isZoomToFill) }

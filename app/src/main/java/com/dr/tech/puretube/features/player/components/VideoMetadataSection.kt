@@ -53,6 +53,8 @@ fun VideoMetadataSection(
     onWatchLaterToggle: () -> Unit,
     onAudioOnlyToggle: () -> Unit = {},
     onSleepTimerClick: () -> Unit = {},
+    onAddToPlaylistClick: () -> Unit = {},
+    onCaptionClick: () -> Unit = {},
     onSeekTo: (Long) -> Unit = {},
     onChannelClick: () -> Unit = {}
 ) {
@@ -206,7 +208,9 @@ fun VideoMetadataSection(
             isAudioOnly = isAudioOnly,
             onWatchLaterToggle = onWatchLaterToggle,
             onAudioOnlyToggle = onAudioOnlyToggle,
-            onSleepTimerClick = onSleepTimerClick
+            onSleepTimerClick = onSleepTimerClick,
+            onAddToPlaylistClick = onAddToPlaylistClick,
+            onCaptionClick = onCaptionClick
         )
 
         // 5. Chapters Row

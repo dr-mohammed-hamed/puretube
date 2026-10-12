@@ -2,6 +2,9 @@ package com.dr.tech.puretube.features.di
 
 import com.dr.tech.puretube.core.designsystem.theme.ThemePreferences
 import com.dr.tech.puretube.features.feed.FeedViewModel
+import com.dr.tech.puretube.features.library.LibraryViewModel
+import com.dr.tech.puretube.features.playlists.PlaylistViewModel
+import com.dr.tech.puretube.features.search.SearchViewModel
 import com.dr.tech.puretube.features.settings.SettingsViewModel
 import com.dr.tech.puretube.features.subscriptions.SubscriptionsViewModel
 import com.dr.tech.puretube.features.watchlater.WatchLaterViewModel
@@ -50,7 +53,9 @@ val featuresModule = module {
             videoDetailsRepository = get(),
             historyRepository = get(),
             subscriptionRepository = get(),
-            watchLaterRepository = get()
+            watchLaterRepository = get(),
+            playbackPrefs = get(),
+            playlistRepository = get()
         )
     }
 
@@ -59,6 +64,27 @@ val featuresModule = module {
             channelRepository = get(),
             subscriptionRepository = get(),
             watchLaterRepository = get()
+        )
+    }
+
+    viewModel {
+        SearchViewModel(
+            searchRepository = get(),
+            searchHistoryDao = get()
+        )
+    }
+
+    viewModel {
+        LibraryViewModel(
+            historyRepository = get(),
+            watchLaterRepository = get(),
+            playlistRepository = get()
+        )
+    }
+
+    viewModel {
+        PlaylistViewModel(
+            playlistRepository = get()
         )
     }
 }

@@ -2,6 +2,9 @@ package com.dr.tech.puretube.core.data.di
 
 import com.dr.tech.puretube.core.data.repository.FeedRepository
 import com.dr.tech.puretube.core.data.repository.HistoryRepository
+import com.dr.tech.puretube.core.data.repository.PlaylistRepository
+import com.dr.tech.puretube.core.data.repository.SearchRepository
+import com.dr.tech.puretube.core.data.repository.SearchRepositoryImpl
 import com.dr.tech.puretube.core.data.repository.SubscriptionRepository
 import com.dr.tech.puretube.core.data.repository.WatchLaterRepository
 import com.dr.tech.puretube.core.extractor.portability.ImportExportService
@@ -59,6 +62,19 @@ val repositoryModule = module {
 
     single {
         com.dr.tech.puretube.core.data.repository.ChannelRepository(
+            extractorThrottler = get()
+        )
+    }
+
+    single<SearchRepository> {
+        SearchRepositoryImpl(
+            extractorThrottler = get()
+        )
+    }
+
+    single {
+        PlaylistRepository(
+            playlistDao = get(),
             extractorThrottler = get()
         )
     }
